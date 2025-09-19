@@ -1,0 +1,17 @@
+[package]
+name = "ritm"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "An example of combining various libraries for aarch64 OS development."
+authors = ["Mateusz Maćkowski <mmac@google.com>"]
+repository = "https://github.com/google/ritm"
+keywords = ["arm", "aarch64", "cortex-a", "osdev"]
+categories = ["embedded", "no-std"]
+
+[dependencies]
+aarch64-paging = { version = "0.10", default-features = false }
+aarch64-rt = { version = "0.2", features = ["el2", "exceptions", "initial-pagetable", "psci"], default-features = false }
+arm-pl011-uart = "0.3"
+buddy_system_allocator = { version = "0.11", default-features = false, features = ["alloc", "use_spin"] }
+smccc = "0.2"
