@@ -6,9 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use core::arch::asm;
+
 #[unsafe(no_mangle)]
-extern "C" fn sync_exception_current(_elr: u64, _spsr: u64) {
-    panic!("Unexpected sync_exception_current");
+extern "C" fn sync_exception_current(elr: u64, _spsr: u64) {
+    panic!(
+        "Unexpected sync_exception_current, esr={:#x}, far={:#x}, elr={:#x}",
+        esr(),
+        far(),
+        elr
+    );
 }
 
 #[unsafe(no_mangle)]
@@ -44,4 +51,22 @@ extern "C" fn fiq_lower(_elr: u64, _spsr: u64) {
 #[unsafe(no_mangle)]
 extern "C" fn serr_lower(_elr: u64, _spsr: u64) {
     panic!("Unexpected serr_lower");
+}
+
+fn esr() -> u64 {
+    let mut esr: u64;
+    // SAFETY: This only reads a system register.
+    unsafe {
+        asm!("mrs {esr}, esr_el2", esr = out(reg) esr);
+    }
+    esr
+}
+
+fn far() -> u64 {
+    let mut far: u64;
+    // SAFETY: This only reads a system register.
+    unsafe {
+        asm!("mrs {far}, far_el2", far = out(reg) far);
+    }
+    far
 }

@@ -29,7 +29,7 @@ checksum = "b62040eef329ede76c8b2af149362b0fd42ec9d8c436d9eb9d47db35b71cb300"
 dependencies = [
  "bitflags",
  "embedded-hal-nb",
- "embedded-io",
+ "embedded-io 0.7.1",
  "safe-mmio",
  "thiserror",
  "zerocopy",
@@ -47,7 +47,7 @@ version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1a0108968a3a2dab95b089c0fc3f1afa7759aa5ebe6f1d86d206d6f7ba726eb"
 dependencies = [
- "spin",
+ "spin 0.9.8",
 ]
 
 [[package]]
@@ -65,6 +65,12 @@ dependencies = [
  "embedded-hal",
  "nb",
 ]
+
+[[package]]
+name = "embedded-io"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "embedded-io"
@@ -86,6 +92,15 @@ name = "nb"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
+
+[[package]]
+name = "percore"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19df9b1714d26c29db48735fa41501c7072e59ae38c8c9651fd53a933a43a883"
+dependencies = [
+ "zerocopy",
+]
 
 [[package]]
 name = "proc-macro2"
@@ -113,7 +128,10 @@ dependencies = [
  "aarch64-rt",
  "arm-pl011-uart",
  "buddy_system_allocator",
+ "embedded-io 0.6.1",
+ "percore",
  "smccc",
+ "spin 0.10.0",
 ]
 
 [[package]]
@@ -148,6 +166,12 @@ checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 dependencies = [
  "lock_api",
 ]
+
+[[package]]
+name = "spin"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
 
 [[package]]
 name = "syn"

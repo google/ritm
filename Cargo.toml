@@ -14,4 +14,7 @@ aarch64-paging = { version = "0.10", default-features = false }
 aarch64-rt = { version = "0.2", features = ["el2", "exceptions", "initial-pagetable", "psci"], default-features = false }
 arm-pl011-uart = "0.4"
 buddy_system_allocator = { version = "0.11", default-features = false, features = ["alloc", "use_spin"] }
+embedded-io = "0.6"
+percore = "0.2"
 smccc = "0.2"
+spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-features = false }
