@@ -15,7 +15,7 @@ mod console;
 mod exceptions;
 
 use aarch64_paging::paging::Attributes;
-use aarch64_rt::entry;
+use aarch64_rt::{InitialPagetable, entry, initial_pagetable};
 use arm_pl011_uart::{PL011Registers, Uart, UniqueMmioPointer};
 use buddy_system_allocator::LockedHeap;
 use core::arch::naked_asm;
@@ -24,6 +24,30 @@ use embedded_io::Write;
 
 /// Base address of the primary PL011 UART.
 const PL011_BASE_ADDRESS: NonNull<PL011Registers> = NonNull::new(0x900_0000 as _).unwrap();
+
+/// Attributes to use for device memory in the initial identity map.
+const DEVICE_ATTRIBUTES: Attributes = Attributes::VALID
+    .union(Attributes::ATTRIBUTE_INDEX_0)
+    .union(Attributes::ACCESSED)
+    .union(Attributes::UXN);
+
+/// Attributes to use for normal memory in the initial identity map.
+const MEMORY_ATTRIBUTES: Attributes = Attributes::VALID
+    .union(Attributes::ATTRIBUTE_INDEX_1)
+    .union(Attributes::INNER_SHAREABLE)
+    .union(Attributes::ACCESSED)
+    .union(Attributes::NON_GLOBAL);
+
+initial_pagetable!({
+    let mut idmap = [0; 512];
+    // 1 GiB of device memory.
+    idmap[0] = DEVICE_ATTRIBUTES.bits();
+    // 1 GiB of normal memory.
+    idmap[1] = MEMORY_ATTRIBUTES.bits() | 0x40000000;
+    // Another 1 GiB of device memory starting at 256 GiB.
+    idmap[256] = DEVICE_ATTRIBUTES.bits() | 0x4000000000;
+    InitialPagetable(idmap)
+});
 
 #[global_allocator]
 static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
