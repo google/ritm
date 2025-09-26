@@ -8,7 +8,7 @@
 
 TARGET := --target aarch64-unknown-none
 
-QEMU_BIN := target/osdemo.qemu.bin
+QEMU_BIN := target/ritm.qemu.bin
 QEMU_RUSTFLAGS := "--cfg platform=\"qemu\""
 
 .PHONY: all build.qemu clean clippy qemu
