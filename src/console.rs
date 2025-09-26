@@ -6,14 +6,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use arm_pl011_uart::Uart;
+use crate::platform::ConsoleImpl;
 use core::panic::PanicInfo;
 use embedded_io::{ErrorType, Write};
 use percore::{ExceptionLock, exception_free};
 use smccc::{Smc, psci::system_off};
 use spin::{Once, mutex::SpinMutex};
 
-static CONSOLE: Once<SharedConsole<Uart<'static>>> = Once::new();
+static CONSOLE: Once<SharedConsole<ConsoleImpl>> = Once::new();
 
 /// A console guarded by a spin mutex so that it may be shared between threads.
 ///
@@ -66,7 +66,7 @@ impl<T: ErrorType + Send + 'static> ErrorType for Console<T> {
 }
 
 /// Initialises the shared console.
-pub fn init(console: Uart<'static>) -> Console<Uart<'static>> {
+pub fn init(console: ConsoleImpl) -> Console<ConsoleImpl> {
     let shared = CONSOLE.call_once(|| SharedConsole {
         console: ExceptionLock::new(SpinMutex::new(console)),
     });

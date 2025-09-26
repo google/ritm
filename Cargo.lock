@@ -88,6 +88,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "log"
+version = "0.4.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
+
+[[package]]
 name = "nb"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -129,9 +135,12 @@ dependencies = [
  "arm-pl011-uart",
  "buddy_system_allocator",
  "embedded-io 0.6.1",
+ "log",
  "percore",
+ "safe-mmio",
  "smccc",
  "spin 0.10.0",
+ "synopsys-dw-uart",
 ]
 
 [[package]]
@@ -182,6 +191,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "synopsys-dw-uart"
+version = "0.1.0"
+source = "git+https://github.com/m4tx/synopsys-dw-uart.git?rev=b2578c3b6b77576282ec68c01a91f161a60b5c9c#b2578c3b6b77576282ec68c01a91f161a60b5c9c"
+dependencies = [
+ "bitflags",
+ "embedded-io 0.6.1",
+ "safe-mmio",
+ "thiserror",
+ "zerocopy",
 ]
 
 [[package]]

@@ -8,7 +8,7 @@
 
 use std::env;
 
-const PLATFORMS: [&str; 1] = ["qemu"];
+const PLATFORMS: [&str; 2] = ["qemu", "pixel"];
 
 fn main() {
     println!(

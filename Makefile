@@ -10,8 +10,10 @@ TARGET := --target aarch64-unknown-none
 
 QEMU_BIN := target/ritm.qemu.bin
 QEMU_RUSTFLAGS := "--cfg platform=\"qemu\""
+PIXEL_BIN := target/ritm.pixel.bin
+PIXEL_RUSTFLAGS := "--cfg platform=\"pixel\""
 
-.PHONY: all build.qemu clean clippy qemu
+.PHONY: all build.qemu build.pixel clean clippy qemu
 
 all: $(QEMU_BIN)
 
@@ -21,8 +23,14 @@ clippy:
 build.qemu:
 	RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo build $(TARGET)
 
+build.pixel:
+	RUSTFLAGS=$(PIXEL_RUSTFLAGS) cargo build $(TARGET)
+
 $(QEMU_BIN): build.qemu
 	RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo objcopy $(TARGET) -- -O binary $@
+
+$(PIXEL_BIN): build.pixel
+	RUSTFLAGS=$(PIXEL_RUSTFLAGS) cargo objcopy $(TARGET) -- -O binary $@
 
 qemu: $(QEMU_BIN)
 	qemu-system-aarch64 -machine virt,virtualization=on,gic-version=3 -cpu cortex-a57 -display none -kernel $< -s \
