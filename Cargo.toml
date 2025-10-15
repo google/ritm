@@ -14,13 +14,10 @@ aarch64-paging = { version = "0.10", default-features = false }
 aarch64-rt = { version = "0.2", features = ["el2", "exceptions", "initial-pagetable", "psci"], default-features = false }
 arm-pl011-uart = "0.4"
 buddy_system_allocator = { version = "0.11", default-features = false, features = ["alloc", "use_spin"] }
-embedded-io = "0.6"
+embedded-io = "0.7"
 log = "0.4"
 percore = "0.2"
 safe-mmio = "0.2"
 smccc = "0.2"
 spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-features = false }
-synopsys-dw-uart = "0.1"
-
-[patch.crates-io]
-synopsys-dw-uart = { git = "https://github.com/m4tx/synopsys-dw-uart.git", rev = "b2578c3b6b77576282ec68c01a91f161a60b5c9c" }
+synopsys-dw-uart = "0.2"
