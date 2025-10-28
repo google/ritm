@@ -1,0 +1,14 @@
+[package]
+name = "ritm_device_tree"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+alloc = []
+write = ["alloc"]
+
+[dependencies]
+indexmap = { version = "2", default-features = false }
+twox-hash = { version = "2", features = ["xxhash64"], default-features = false }
+zerocopy = { version = "0.8", features = ["derive"] }

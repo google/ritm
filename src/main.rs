@@ -26,7 +26,7 @@ use flat_device_tree::Fdt;
 use crate::platform::{Platform, PlatformImpl};
 
 const LOG_LEVEL: LevelFilter = LevelFilter::Info;
-const BOOT_KERNEL_AT_EL1: bool = true;
+const BOOT_KERNEL_AT_EL1: bool = false;
 
 #[global_allocator]
 static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();

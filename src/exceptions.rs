@@ -64,6 +64,7 @@ unsafe extern "C" fn sync_lower() {
 
 enum ExceptionClass {
     SmcTrappedInAArch64,
+    #[allow(unused)]
     Unknown(u8),
 }
 
@@ -88,16 +89,13 @@ extern "C" fn sync_lower_impl(elr: u64, _spsr: u64, x0: u64, x1: u64, x2: u64, x
                 "Forwarding the PSCI call: fn_id={x0:#x}, arg0={x1:#x}, arg1={x2:#x}, arg2={x3:#x}"
             );
             let out: u64;
+            // SAFETY: assuming the PSCI call is correct
             unsafe {
                 out = psci_forward(x0, x1, x2, x3);
             }
             info!(
                 "Forwarded the PSCI call: fn_id={x0:#x}, arg0={x1:#x}, arg1={x2:#x}, arg2={x3:#x}; out={out:#x}"
             );
-
-            if x1 == 0xc4000012 {
-                foo();
-            }
 
             out
         }
@@ -114,11 +112,6 @@ extern "C" fn sync_lower_impl(elr: u64, _spsr: u64, x0: u64, x1: u64, x2: u64, x
             );
         }
     }
-}
-
-#[unsafe(no_mangle)]
-fn foo() {
-    info!("wow");
 }
 
 #[unsafe(naked)]
