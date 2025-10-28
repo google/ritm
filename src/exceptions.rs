@@ -6,7 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use core::arch::asm;
+use core::arch::{asm, naked_asm};
+
+use log::info;
 
 #[unsafe(no_mangle)]
 extern "C" fn sync_exception_current(elr: u64, _spsr: u64) {
@@ -33,9 +35,98 @@ extern "C" fn serr_current(_elr: u64, _spsr: u64) {
     panic!("Unexpected serr_current");
 }
 
+#[unsafe(naked)]
 #[unsafe(no_mangle)]
-extern "C" fn sync_lower(_elr: u64, _spsr: u64) {
-    panic!("Unexpected sync_lower");
+#[rustfmt::skip]
+unsafe extern "C" fn sync_lower() {
+    naked_asm!(
+        "stp x29, x30, [sp, #-0x10]!",
+
+        "ldp x2, x3, [sp, #0x10]",
+        "ldp x4, x5, [sp, #0x20]",
+
+        "bl {sync_lower_impl}",
+
+        "mov x1, xzr",
+        "mov x2, xzr",
+        "mov x3, xzr",
+        "stp x0, x1, [sp, #0x10]",
+        "stp x2, x3, [sp, #0x20]",
+        "ldr x4, [sp, #8 * 22 + 16]",
+        "add x4, x4, #4",
+        "str x4, [sp, #8 * 22 + 16]",
+
+        "ldp x29, x30, [sp], #0x10",
+        "ret",
+        sync_lower_impl = sym self::sync_lower_impl,
+    )
+}
+
+enum ExceptionClass {
+    SmcTrappedInAArch64,
+    Unknown(u8),
+}
+
+impl ExceptionClass {
+    fn new(value: u8) -> Self {
+        match value {
+            0x17 => Self::SmcTrappedInAArch64,
+            _ => Self::Unknown(value),
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn sync_lower_impl(elr: u64, _spsr: u64, x0: u64, x1: u64, x2: u64, x3: u64) -> u64 {
+    let esr = esr();
+    let ec = u8::try_from((esr >> 26) & 0x3f).expect("`& 0x3f` guarantees the value fits in u8");
+    let ec = ExceptionClass::new(ec);
+
+    match ec {
+        ExceptionClass::SmcTrappedInAArch64 => {
+            info!(
+                "Forwarding the PSCI call: fn_id={x0:#x}, arg0={x1:#x}, arg1={x2:#x}, arg2={x3:#x}"
+            );
+            let out: u64;
+            unsafe {
+                out = psci_forward(x0, x1, x2, x3);
+            }
+            info!(
+                "Forwarded the PSCI call: fn_id={x0:#x}, arg0={x1:#x}, arg1={x2:#x}, arg2={x3:#x}; out={out:#x}"
+            );
+
+            if x1 == 0xc4000012 {
+                foo();
+            }
+
+            out
+        }
+        _ => {
+            panic!(
+                "Unexpected sync_lower, esr={:#x}, far={:#x}, elr={:#x}, x0={:#x}, x1={:#x}, x2={:#x}, x3={:#x}",
+                esr,
+                far(),
+                elr,
+                x0,
+                x1,
+                x2,
+                x3,
+            );
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+fn foo() {
+    info!("wow");
+}
+
+#[unsafe(naked)]
+unsafe extern "C" fn psci_forward(fn_id: u64, arg0: u64, arg1: u64, arg2: u64) -> u64 {
+    naked_asm! {
+        "smc #0",
+        "ret",
+    };
 }
 
 #[unsafe(no_mangle)]

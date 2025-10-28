@@ -21,3 +21,4 @@ safe-mmio = "0.2"
 smccc = "0.2"
 spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-features = false }
 synopsys-dw-uart = "0.2"
+flat_device_tree = { version = "3", features = ["pretty-printing"] }
