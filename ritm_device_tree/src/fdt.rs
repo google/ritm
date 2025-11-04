@@ -6,6 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! A read-only API for parsing and traversing a Flattened Device Tree (FDT).
+//!
+//! This module provides the [`Fdt`] struct, which is the entry point for
+//! parsing and traversing an FDT blob. The API is designed to be safe and
+//! efficient, performing no memory allocation and providing a zero-copy view
+//! of the FDT data.
+
 use crate::{
     error::{Error, ErrorKind},
     node::FdtNode,
@@ -130,6 +137,14 @@ impl TryFrom<u32> for FdtToken {
 
 impl<'a> Fdt<'a> {
     /// Creates a new `Fdt` from the given byte slice.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// ```
     pub fn new(data: &'a [u8]) -> Result<Self, Error> {
         if data.len() < core::mem::size_of::<FdtHeader>() {
             return Err(Error::new(ErrorKind::InvalidLength, 0));
@@ -163,6 +178,15 @@ impl<'a> Fdt<'a> {
     /// The memory region starting at `data` and spanning `totalsize` bytes (as specified in the FDT header)
     /// must be valid and accessible for reading.
     /// The FDT blob must be well-formed and adhere to the Device Tree Specification.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test.dtb");
+    /// let ptr = dtb.as_ptr();
+    /// let fdt = unsafe { Fdt::from_raw(ptr).unwrap() };
+    /// ```
     pub unsafe fn from_raw(data: *const u8) -> Result<Self, Error> {
         // SAFETY: The caller guarantees that `data` is a valid pointer to a Flattened Device Tree (FDT) blob.
         // We are reading an `FdtHeader` from this pointer, which is a `#[repr(C, packed)]` struct.
@@ -184,6 +208,16 @@ impl<'a> Fdt<'a> {
     }
 
     /// Returns the root node of the device tree.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// let root = fdt.root().unwrap();
+    /// assert_eq!(root.name().unwrap(), "");
+    /// ```
     pub fn root(&self) -> Result<FdtNode<'_>, Error> {
         let offset = self.header().off_dt_struct() as usize;
         let token = self.read_token(offset)?;
@@ -194,6 +228,16 @@ impl<'a> Fdt<'a> {
     }
 
     /// Finds a node by its path.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test_traversal.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// let node = fdt.find_node("/a/b/c").unwrap().unwrap();
+    /// assert_eq!(node.name().unwrap(), "c");
+    /// ```
     pub fn find_node(&self, path: &str) -> Option<Result<FdtNode<'_>, Error>> {
         if !path.starts_with('/') {
             return None;

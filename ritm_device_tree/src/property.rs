@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! A read-only API for inspecting a device tree property.
+
 use crate::{
     error::{Error, ErrorKind},
     fdt::{FDT_TAGSIZE, Fdt, FdtToken},
@@ -33,6 +35,17 @@ impl<'a> FdtProperty<'a> {
         self.value
     }
     /// Returns the value of this property as a `u32`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test_props.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// let node = fdt.find_node("/test-props").unwrap().unwrap();
+    /// let prop = node.property("u32-prop").unwrap().unwrap();
+    /// assert_eq!(prop.as_u32().unwrap(), 0x12345678);
+    /// ```
     pub fn as_u32(&self) -> Result<u32, Error> {
         big_endian::U32::ref_from_bytes(self.value)
             .map(|val| val.get())
@@ -40,6 +53,17 @@ impl<'a> FdtProperty<'a> {
     }
 
     /// Returns the value of this property as a `u64`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test_props.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// let node = fdt.find_node("/test-props").unwrap().unwrap();
+    /// let prop = node.property("u64-prop").unwrap().unwrap();
+    /// assert_eq!(prop.as_u64().unwrap(), 0x1122334455667788);
+    /// ```
     pub fn as_u64(&self) -> Result<u64, Error> {
         big_endian::U64::ref_from_bytes(self.value)
             .map(|val| val.get())
@@ -47,6 +71,17 @@ impl<'a> FdtProperty<'a> {
     }
 
     /// Returns the value of this property as a string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test_props.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// let node = fdt.find_node("/test-props").unwrap().unwrap();
+    /// let prop = node.property("str-prop").unwrap().unwrap();
+    /// assert_eq!(prop.as_str().unwrap(), "hello world");
+    /// ```
     pub fn as_str(&self) -> Result<&'a str, Error> {
         let cstr = CStr::from_bytes_with_nul(self.value)
             .map_err(|_| Error::new(ErrorKind::InvalidString, self.value_offset))?;
@@ -55,6 +90,21 @@ impl<'a> FdtProperty<'a> {
     }
 
     /// Returns an iterator over the strings in this property.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test_props.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// let node = fdt.find_node("/test-props").unwrap().unwrap();
+    /// let prop = node.property("str-list-prop").unwrap().unwrap();
+    /// let mut str_list = prop.as_str_list();
+    /// assert_eq!(str_list.next(), Some("first"));
+    /// assert_eq!(str_list.next(), Some("second"));
+    /// assert_eq!(str_list.next(), Some("third"));
+    /// assert_eq!(str_list.next(), None);
+    /// ```
     pub fn as_str_list(&self) -> impl Iterator<Item = &'a str> {
         FdtStringListIterator { value: self.value }
     }

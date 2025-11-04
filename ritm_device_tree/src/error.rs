@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! Error types for the `ritm_device_tree` crate.
+
 use core::fmt;
 
 /// An error that can occur when parsing a device tree.

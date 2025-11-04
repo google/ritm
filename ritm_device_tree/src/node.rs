@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! A read-only API for inspecting a device tree node.
+
 use crate::{
     error::Error,
     fdt::{FDT_TAGSIZE, Fdt, FdtToken},
@@ -23,12 +25,34 @@ pub struct FdtNode<'a> {
 
 impl<'a> FdtNode<'a> {
     /// Returns the name of this node.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test_children.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// let root = fdt.root().unwrap();
+    /// let child = root.child("child1").unwrap().unwrap();
+    /// assert_eq!(child.name().unwrap(), "child1");
+    /// ```
     pub fn name(&self) -> Result<&'a str, Error> {
         let name_offset = self.offset + FDT_TAGSIZE;
         self.fdt.string_at_offset(name_offset, None)
     }
 
     /// Returns a property by its name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test_props.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// let node = fdt.find_node("/test-props").unwrap().unwrap();
+    /// let prop = node.property("u32-prop").unwrap().unwrap();
+    /// assert_eq!(prop.name(), "u32-prop");
+    /// ```
     pub fn property(&self, name: &str) -> crate::Result<Option<FdtProperty<'a>>> {
         for property in self.properties() {
             let property = property?;
@@ -40,6 +64,19 @@ impl<'a> FdtNode<'a> {
     }
 
     /// Returns an iterator over the properties of this node.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test_props.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// let node = fdt.find_node("/test-props").unwrap().unwrap();
+    /// let mut props = node.properties();
+    /// assert_eq!(props.next().unwrap().unwrap().name(), "u32-prop");
+    /// assert_eq!(props.next().unwrap().unwrap().name(), "u64-prop");
+    /// assert_eq!(props.next().unwrap().unwrap().name(), "str-prop");
+    /// ```
     pub fn properties(&self) -> impl Iterator<Item = crate::Result<FdtProperty<'a>>> + use<'a> {
         FdtPropIter::Start {
             fdt: self.fdt,
@@ -48,6 +85,17 @@ impl<'a> FdtNode<'a> {
     }
 
     /// Returns a child node by its name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test_children.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// let root = fdt.root().unwrap();
+    /// let child = root.child("child1").unwrap().unwrap();
+    /// assert_eq!(child.name().unwrap(), "child1");
+    /// ```
     pub fn child(&self, name: &str) -> crate::Result<Option<FdtNode<'a>>> {
         for child in self.children() {
             let child = child?;
@@ -59,6 +107,19 @@ impl<'a> FdtNode<'a> {
     }
 
     /// Returns an iterator over the children of this node.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::Fdt;
+    /// # let dtb = include_bytes!("../dtb/test_children.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// let root = fdt.root().unwrap();
+    /// let mut children = root.children();
+    /// assert_eq!(children.next().unwrap().unwrap().name().unwrap(), "child1");
+    /// assert_eq!(children.next().unwrap().unwrap().name().unwrap(), "child2");
+    /// assert!(children.next().is_none());
+    /// ```
     pub fn children(&self) -> impl Iterator<Item = crate::Result<FdtNode<'a>>> + use<'a> {
         FdtChildIter::Start {
             fdt: self.fdt,

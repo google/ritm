@@ -6,9 +6,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! Support for applying device tree overlays.
+//!
+//! This module provides the [`DeviceTree::apply_overlay`] method, which can be
+//! used to apply a device tree overlay to a base device tree.
+
 use crate::{
-    Error,
     ir::{DeviceTree, DeviceTreeNode},
+    Error,
 };
 use alloc::vec::Vec;
 

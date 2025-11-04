@@ -6,6 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! A read-write, in-memory representation of a device tree.
+//!
+//! This module provides the [`DeviceTree`], [`DeviceTreeNode`], and
+//! [`DeviceTreeProperty`] structs, which can be used to create or modify a
+//! device tree in memory. The [`DeviceTree`] can then be serialized to a
+//! flattened device tree blob.
+
 use core::fmt::Display;
 
 use crate::{error::Error, fdt::Fdt, node::FdtNode, property::FdtProperty, writer};
@@ -16,6 +23,19 @@ use indexmap::IndexMap;
 use twox_hash::xxhash64;
 
 /// A mutable, in-memory representation of a device tree.
+///
+/// This struct provides a high-level API for creating and modifying a device
+/// tree. It can be created from scratch or by parsing an existing FDT blob.
+///
+/// # Examples
+///
+/// ```
+/// # use ritm_device_tree::{DeviceTree, DeviceTreeNode};
+/// let root = DeviceTreeNode::new("/");
+/// let mut tree = DeviceTree::new(root);
+/// tree.root_mut().add_child(DeviceTreeNode::new("child"));
+/// let child = tree.find_node_mut("/child").unwrap();
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceTree {
     root: DeviceTreeNode,
@@ -23,11 +43,28 @@ pub struct DeviceTree {
 
 impl DeviceTree {
     /// Creates a new `DeviceTree` with the given root node.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::{DeviceTree, DeviceTreeNode};
+    /// let root = DeviceTreeNode::new("/");
+    /// let tree = DeviceTree::new(root);
+    /// ```
     pub fn new(root: DeviceTreeNode) -> Self {
         Self { root }
     }
 
     /// Creates a new `DeviceTree` from a `Fdt`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::{Fdt, DeviceTree};
+    /// # let dtb = include_bytes!("../dtb/test.dtb");
+    /// let fdt = Fdt::new(dtb).unwrap();
+    /// let tree = DeviceTree::from_fdt(&fdt).unwrap();
+    /// ```
     pub fn from_fdt(fdt: &Fdt) -> Result<Self, Error> {
         let root = DeviceTreeNode::try_from(fdt.root()?)?;
         Ok(DeviceTree { root })
@@ -49,6 +86,16 @@ impl DeviceTree {
     }
 
     /// Finds a node by its path and returns a mutable reference to it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::{DeviceTree, DeviceTreeNode};
+    /// let mut tree = DeviceTree::new(DeviceTreeNode::new("/"));
+    /// tree.root_mut().add_child(DeviceTreeNode::new("child"));
+    /// let child = tree.find_node_mut("/child").unwrap();
+    /// assert_eq!(child.name(), "child");
+    /// ```
     pub fn find_node_mut(&mut self, path: &str) -> Option<&mut DeviceTreeNode> {
         if !path.starts_with('/') {
             return None;
@@ -68,6 +115,9 @@ impl DeviceTree {
 }
 
 /// A mutable, in-memory representation of a device tree node.
+///
+/// Children and properties are stored in [`IndexMap`]s, which provide O(1)
+/// lookups by name while preserving insertion order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceTreeNode {
     name: String,
@@ -87,6 +137,14 @@ impl Default for DeviceTreeNode {
 
 impl DeviceTreeNode {
     /// Creates a new `DeviceTreeNode` with the given name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::DeviceTreeNode;
+    /// let node = DeviceTreeNode::new("my-node");
+    /// assert_eq!(node.name(), "my-node");
+    /// ```
     #[must_use]
     pub fn new(name: impl Into<String>) -> Self {
         Self {
@@ -120,12 +178,16 @@ impl DeviceTreeNode {
     }
 
     /// Finds a property by its name and returns a reference to it.
+    ///
+    /// This operation is O(1).
     #[must_use]
     pub fn property(&self, name: &str) -> Option<&DeviceTreeProperty> {
         self.properties.get(name)
     }
 
     /// Finds a property by its name and returns a mutable reference to it.
+    ///
+    /// This operation is O(1).
     #[must_use]
     pub fn property_mut(&mut self, name: &str) -> Option<&mut DeviceTreeProperty> {
         self.properties.get_mut(name)
@@ -153,13 +215,17 @@ impl DeviceTreeNode {
         self.children.values_mut()
     }
 
-    /// Finds a child by its name and returns a mutable reference to it.
+    /// Finds a child by its name and returns a reference to it.
+    ///
+    /// This operation is O(1).
     #[must_use]
     pub fn child(&self, name: &str) -> Option<&DeviceTreeNode> {
         self.children.get(name)
     }
 
     /// Finds a child by its name and returns a mutable reference to it.
+    ///
+    /// This operation is O(1).
     #[must_use]
     pub fn child_mut(&mut self, name: &str) -> Option<&mut DeviceTreeNode> {
         self.children.get_mut(name)
@@ -223,6 +289,15 @@ pub struct DeviceTreeProperty {
 
 impl DeviceTreeProperty {
     /// Creates a new `DeviceTreeProperty` with the given name and value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ritm_device_tree::DeviceTreeProperty;
+    /// let prop = DeviceTreeProperty::new("my-prop", vec![1, 2, 3, 4]);
+    /// assert_eq!(prop.name(), "my-prop");
+    /// assert_eq!(prop.value(), &[1, 2, 3, 4]);
+    /// ```
     #[must_use]
     pub fn new(name: impl Into<String>, value: impl Into<Vec<u8>>) -> Self {
         Self {
