@@ -29,10 +29,10 @@ impl<'a> FdtNode<'a> {
     }
 
     /// Returns a property by its name.
-    pub fn property_by_name(&self, name: &str) -> crate::Result<Option<FdtProperty<'a>>> {
+    pub fn property(&self, name: &str) -> crate::Result<Option<FdtProperty<'a>>> {
         for property in self.properties() {
             let property = property?;
-            if property.name == name {
+            if property.name() == name {
                 return Ok(Some(property));
             }
         }
@@ -48,7 +48,7 @@ impl<'a> FdtNode<'a> {
     }
 
     /// Returns a child node by its name.
-    pub fn child_by_name(&self, name: &str) -> crate::Result<Option<FdtNode<'a>>> {
+    pub fn child(&self, name: &str) -> crate::Result<Option<FdtNode<'a>>> {
         for child in self.children() {
             let child = child?;
             if child.name()? == name {

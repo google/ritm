@@ -36,19 +36,19 @@ fn read_prop_values() {
     let mut props = node.properties();
 
     let prop = props.next().unwrap().unwrap();
-    assert_eq!(prop.name, "u32-prop");
+    assert_eq!(prop.name(), "u32-prop");
     assert_eq!(prop.as_u32().unwrap(), 0x12345678);
 
     let prop = props.next().unwrap().unwrap();
-    assert_eq!(prop.name, "u64-prop");
+    assert_eq!(prop.name(), "u64-prop");
     assert_eq!(prop.as_u64().unwrap(), 0x1122334455667788);
 
     let prop = props.next().unwrap().unwrap();
-    assert_eq!(prop.name, "str-prop");
+    assert_eq!(prop.name(), "str-prop");
     assert_eq!(prop.as_str().unwrap(), "hello world");
 
     let prop = props.next().unwrap().unwrap();
-    assert_eq!(prop.name, "str-list-prop");
+    assert_eq!(prop.name(), "str-list-prop");
     let mut str_list = prop.as_str_list();
     assert_eq!(str_list.next(), Some("first"));
     assert_eq!(str_list.next(), Some("second"));
@@ -63,18 +63,18 @@ fn get_property_by_name() {
     let dtb = include_bytes!("../dtb/test_props.dtb");
     let fdt = Fdt::new(dtb).unwrap();
     let root = fdt.root().unwrap();
-    let node = root.child_by_name("test-props").unwrap().unwrap();
+    let node = root.child("test-props").unwrap().unwrap();
 
-    let prop = node.property_by_name("u32-prop").unwrap().unwrap();
-    assert_eq!(prop.name, "u32-prop");
+    let prop = node.property("u32-prop").unwrap().unwrap();
+    assert_eq!(prop.name(), "u32-prop");
     assert_eq!(prop.as_u32().unwrap(), 0x12345678);
 
-    let prop = node.property_by_name("str-prop").unwrap().unwrap();
-    assert_eq!(prop.name, "str-prop");
+    let prop = node.property("str-prop").unwrap().unwrap();
+    assert_eq!(prop.name(), "str-prop");
     assert_eq!(prop.as_str().unwrap(), "hello world");
 
     assert!(
-        node.property_by_name("non-existent-prop")
+        node.property("non-existent-prop")
             .unwrap()
             .is_none()
     );
@@ -86,13 +86,13 @@ fn get_child_by_name() {
     let fdt = Fdt::new(dtb).unwrap();
     let root = fdt.root().unwrap();
 
-    let child1 = root.child_by_name("child1").unwrap().unwrap();
+    let child1 = root.child("child1").unwrap().unwrap();
     assert_eq!(child1.name().unwrap(), "child1");
 
-    let child2 = root.child_by_name("child2").unwrap().unwrap();
+    let child2 = root.child("child2").unwrap().unwrap();
     assert_eq!(child2.name().unwrap(), "child2");
 
-    assert!(root.child_by_name("non-existent-child").unwrap().is_none());
+    assert!(root.child("non-existent-child").unwrap().is_none());
 }
 
 #[test]
@@ -111,9 +111,9 @@ fn children_nested() {
         .collect();
     assert_eq!(children_names, vec!["child1", "child3"]);
 
-    let child1 = root.child_by_name("child1").unwrap().unwrap();
-    let child2 = child1.child_by_name("child2").unwrap().unwrap();
-    let nested_properties: Vec<_> = child2.properties().map(|prop| prop.unwrap().name).collect();
+    let child1 = root.child("child1").unwrap().unwrap();
+    let child2 = child1.child("child2").unwrap().unwrap();
+    let nested_properties: Vec<_> = child2.properties().map(|prop| prop.unwrap().name().to_owned()).collect();
     assert_eq!(nested_properties, vec!["prop2"]);
 }
 

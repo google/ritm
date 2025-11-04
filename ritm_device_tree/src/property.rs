@@ -17,14 +17,21 @@ use zerocopy::{FromBytes, big_endian};
 /// A property of a device tree node.
 #[derive(Debug, PartialEq)]
 pub struct FdtProperty<'a> {
-    /// The name of the property.
-    pub name: &'a str,
-    /// The value of the property.
-    pub value: &'a [u8],
+    name: &'a str,
+    value: &'a [u8],
     value_offset: usize,
 }
 
 impl<'a> FdtProperty<'a> {
+    /// Returns the name of this property.
+    pub fn name(&self) -> &'a str {
+        self.name
+    }
+
+    /// Returns the value of this property.
+    pub fn value(&self) -> &'a [u8] {
+        self.value
+    }
     /// Returns the value of this property as a `u32`.
     pub fn as_u32(&self) -> Result<u32, Error> {
         big_endian::U32::ref_from_bytes(self.value)

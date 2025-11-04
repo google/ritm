@@ -269,8 +269,8 @@ impl<'a> TryFrom<FdtProperty<'a>> for DeviceTreeProperty {
     type Error = Error;
 
     fn try_from(prop: FdtProperty<'a>) -> Result<Self, Self::Error> {
-        let name = prop.name.to_string();
-        let value = prop.value.to_vec();
+        let name = prop.name().to_string();
+        let value = prop.value().to_vec();
         Ok(DeviceTreeProperty { name, value })
     }
 }
