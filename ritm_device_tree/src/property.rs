@@ -8,7 +8,7 @@
 
 use crate::{
     error::{Error, ErrorKind},
-    fdt::{FDT_TAGSIZE, Fdt},
+    fdt::{FDT_TAGSIZE, Fdt, FdtToken},
 };
 use core::ffi::CStr;
 use core::fmt;
@@ -144,19 +144,27 @@ impl<'a> Iterator for FdtPropIter<'a> {
 impl<'a> FdtPropIter<'a> {
     fn try_next(fdt: &'a Fdt<'a>, offset: &mut usize) -> Option<crate::Result<FdtProperty<'a>>> {
         loop {
-            let token = match fdt.read_u32(*offset) {
+            let token = match fdt.read_token(*offset) {
                 Ok(token) => token,
                 Err(e) => return Some(Err(e)),
             };
             match token {
-                crate::fdt::FDT_PROP => {
-                    let len = match fdt.read_u32(*offset + FDT_TAGSIZE) {
-                        Ok(len) => len as usize,
-                        Err(e) => return Some(Err(e)),
+                FdtToken::Prop => {
+                    let len = match big_endian::U32::ref_from_prefix(
+                        &fdt.data[*offset + FDT_TAGSIZE..],
+                    ) {
+                        Ok((val, _)) => val.get() as usize,
+                        Err(_) => {
+                            return Some(Err(Error::new(ErrorKind::InvalidLength, *offset)))
+                        }
                     };
-                    let nameoff = match fdt.read_u32(*offset + 2 * FDT_TAGSIZE) {
-                        Ok(nameoff) => nameoff as usize,
-                        Err(e) => return Some(Err(e)),
+                    let nameoff = match big_endian::U32::ref_from_prefix(
+                        &fdt.data[*offset + 2 * FDT_TAGSIZE..],
+                    ) {
+                        Ok((val, _)) => val.get() as usize,
+                        Err(_) => {
+                            return Some(Err(Error::new(ErrorKind::InvalidLength, *offset)))
+                        }
                     };
                     let prop_offset = *offset + 3 * FDT_TAGSIZE;
                     *offset = Fdt::align_tag_offset(prop_offset + len);
@@ -171,7 +179,7 @@ impl<'a> FdtPropIter<'a> {
                         value_offset: prop_offset,
                     }));
                 }
-                crate::fdt::FDT_NOP => *offset += FDT_TAGSIZE,
+                FdtToken::Nop => *offset += FDT_TAGSIZE,
                 _ => return None,
             }
         }

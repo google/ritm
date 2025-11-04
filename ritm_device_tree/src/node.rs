@@ -7,10 +7,10 @@
 // except according to those terms.
 
 use crate::{
-    FdtProperty,
     error::Error,
-    fdt::{FDT_TAGSIZE, Fdt},
+    fdt::{FDT_TAGSIZE, Fdt, FdtToken},
     property::FdtPropIter,
+    FdtProperty,
 };
 use core::fmt;
 
@@ -139,12 +139,12 @@ impl<'a> Iterator for FdtChildIter<'a> {
 impl<'a> FdtChildIter<'a> {
     fn try_next(fdt: &'a Fdt<'a>, offset: &mut usize) -> Option<crate::Result<FdtNode<'a>>> {
         loop {
-            let token = match fdt.read_u32(*offset) {
+            let token = match fdt.read_token(*offset) {
                 Ok(token) => token,
                 Err(e) => return Some(Err(e)),
             };
             match token {
-                crate::fdt::FDT_BEGIN_NODE => {
+                FdtToken::BeginNode => {
                     let node_offset = *offset;
                     *offset = match fdt.next_sibling_offset(*offset) {
                         Ok(offset) => offset,
@@ -155,14 +155,14 @@ impl<'a> FdtChildIter<'a> {
                         offset: node_offset,
                     }));
                 }
-                crate::fdt::FDT_END_NODE => return None,
-                crate::fdt::FDT_PROP => {
+                FdtToken::EndNode => return None,
+                FdtToken::Prop => {
                     *offset = match fdt.next_property_offset(*offset + FDT_TAGSIZE) {
                         Ok(offset) => offset,
                         Err(e) => return Some(Err(e)),
                     };
                 }
-                crate::fdt::FDT_NOP => *offset += FDT_TAGSIZE,
+                FdtToken::Nop => *offset += FDT_TAGSIZE,
                 _ => return None,
             }
         }

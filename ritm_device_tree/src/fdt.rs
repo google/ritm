@@ -103,6 +103,31 @@ pub struct Fdt<'a> {
     pub(crate) data: &'a [u8],
 }
 
+/// A token in the device tree structure.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum FdtToken {
+    BeginNode,
+    EndNode,
+    Prop,
+    Nop,
+    End,
+}
+
+impl TryFrom<u32> for FdtToken {
+    type Error = u32;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            FDT_BEGIN_NODE => Ok(FdtToken::BeginNode),
+            FDT_END_NODE => Ok(FdtToken::EndNode),
+            FDT_PROP => Ok(FdtToken::Prop),
+            FDT_NOP => Ok(FdtToken::Nop),
+            FDT_END => Ok(FdtToken::End),
+            _ => Err(value),
+        }
+    }
+}
+
 impl<'a> Fdt<'a> {
     /// Creates a new `Fdt` from the given byte slice.
     pub fn new(data: &'a [u8]) -> Result<Self, Error> {
@@ -161,9 +186,9 @@ impl<'a> Fdt<'a> {
     /// Returns the root node of the device tree.
     pub fn root(&self) -> Result<FdtNode<'_>, Error> {
         let offset = self.header().off_dt_struct() as usize;
-        let token = self.read_u32(offset)?;
-        if token != FDT_BEGIN_NODE {
-            return Err(Error::new(ErrorKind::BadToken(token), offset));
+        let token = self.read_token(offset)?;
+        if token != FdtToken::BeginNode {
+            return Err(Error::new(ErrorKind::BadToken(FDT_BEGIN_NODE), offset));
         }
         Ok(FdtNode { fdt: self, offset })
     }
@@ -194,10 +219,11 @@ impl<'a> Fdt<'a> {
         Some(Ok(current_node))
     }
 
-    pub(crate) fn read_u32(&self, offset: usize) -> Result<u32, Error> {
-        big_endian::U32::ref_from_prefix(&self.data[offset..])
+    pub(crate) fn read_token(&self, offset: usize) -> Result<FdtToken, Error> {
+        let val = big_endian::U32::ref_from_prefix(&self.data[offset..])
             .map(|(val, _)| val.get())
-            .map_err(|_e| Error::new(ErrorKind::InvalidLength, offset))
+            .map_err(|_e| Error::new(ErrorKind::InvalidLength, offset))?;
+        FdtToken::try_from(val).map_err(|t| Error::new(ErrorKind::BadToken(t), offset))
     }
 
     /// Return a string from the string block.
@@ -253,29 +279,29 @@ impl<'a> Fdt<'a> {
 
         // Skip properties
         loop {
-            let token = self.read_u32(offset)?;
+            let token = self.read_token(offset)?;
             match token {
-                FDT_PROP => {
+                FdtToken::Prop => {
                     offset += FDT_TAGSIZE; // skip FDT_PROP
                     offset = self.next_property_offset(offset)?;
                 }
-                FDT_NOP => offset += FDT_TAGSIZE,
+                FdtToken::Nop => offset += FDT_TAGSIZE,
                 _ => break,
             }
         }
 
         // Skip child nodes
         loop {
-            let token = self.read_u32(offset)?;
+            let token = self.read_token(offset)?;
             match token {
-                FDT_BEGIN_NODE => {
+                FdtToken::BeginNode => {
                     offset = self.next_sibling_offset(offset)?;
                 }
-                FDT_END_NODE => {
+                FdtToken::EndNode => {
                     offset += FDT_TAGSIZE;
                     break;
                 }
-                FDT_NOP => offset += FDT_TAGSIZE,
+                FdtToken::Nop => offset += FDT_TAGSIZE,
                 _ => {}
             }
         }
@@ -284,7 +310,9 @@ impl<'a> Fdt<'a> {
     }
 
     pub(crate) fn next_property_offset(&self, mut offset: usize) -> crate::Result<usize> {
-        let len = self.read_u32(offset)? as usize;
+        let len = big_endian::U32::ref_from_prefix(&self.data[offset..])
+            .map(|(val, _)| val.get())
+            .map_err(|_e| Error::new(ErrorKind::InvalidLength, offset))? as usize;
         offset += FDT_TAGSIZE; // skip value length
         offset += FDT_TAGSIZE; // skip name offset
         offset += len; // skip property value
