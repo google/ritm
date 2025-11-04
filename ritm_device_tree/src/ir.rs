@@ -58,10 +58,7 @@ impl DeviceTree {
             return Some(current_node);
         }
         for component in path.split('/').filter(|s| !s.is_empty()) {
-            match current_node
-                .children_mut()
-                .find(|child| child.name() == component)
-            {
+            match current_node.child_mut(component) {
                 Some(node) => current_node = node,
                 None => return None,
             }
@@ -75,7 +72,7 @@ impl DeviceTree {
 pub struct DeviceTreeNode {
     name: String,
     properties: IndexMap<String, DeviceTreeProperty, xxhash64::State>,
-    children: Vec<DeviceTreeNode>,
+    children: IndexMap<String, DeviceTreeNode, xxhash64::State>,
 }
 
 impl Default for DeviceTreeNode {
@@ -83,7 +80,7 @@ impl Default for DeviceTreeNode {
         Self {
             name: String::new(),
             properties: IndexMap::with_hasher(xxhash64::State::with_seed(0xdead_cafe)),
-            children: Vec::new(),
+            children: IndexMap::with_hasher(xxhash64::State::with_seed(0xdead_cafe)),
         }
     }
 }
@@ -147,38 +144,35 @@ impl DeviceTreeNode {
     /// Returns an iterator over the children of this node.
     #[must_use]
     pub fn children(&self) -> impl Iterator<Item = &DeviceTreeNode> {
-        self.children.iter()
+        self.children.values()
     }
 
     /// Returns a mutable iterator over the children of this node.
     #[must_use]
     pub fn children_mut(&mut self) -> impl Iterator<Item = &mut DeviceTreeNode> {
-        self.children.iter_mut()
+        self.children.values_mut()
     }
 
     /// Finds a child by its name and returns a mutable reference to it.
     #[must_use]
     pub fn child(&self, name: &str) -> Option<&DeviceTreeNode> {
-        self.children().find(|child| child.name() == name)
+        self.children.get(name)
     }
 
     /// Finds a child by its name and returns a mutable reference to it.
     #[must_use]
     pub fn child_mut(&mut self, name: &str) -> Option<&mut DeviceTreeNode> {
-        self.children_mut().find(|child| child.name() == name)
+        self.children.get_mut(name)
     }
 
     /// Adds a child to this node.
     pub fn add_child(&mut self, child: DeviceTreeNode) {
-        self.children.push(child);
+        self.children.insert(child.name().to_owned(), child);
     }
 
     /// Removes a child from this node by its name.
     pub fn remove_child(&mut self, name: &str) -> Option<DeviceTreeNode> {
-        self.children
-            .iter()
-            .position(|child| child.name() == name)
-            .map(|index| self.children.remove(index))
+        self.children.shift_remove(name)
     }
 }
 
@@ -202,10 +196,16 @@ impl<'a> TryFrom<FdtNode<'a>> for DeviceTreeNode {
             property_map.insert(property.name().to_owned(), property);
         }
 
-        let children = node
+        let children_vec: Vec<DeviceTreeNode> = node
             .children()
             .map(|child| child?.try_into())
             .collect::<Result<Vec<_>, _>>()?;
+        let mut children =
+            IndexMap::with_capacity_and_hasher(children_vec.len(), xxhash64::State::with_seed(0xdead_cafe));
+        for child in children_vec {
+            children.insert(child.name().to_owned(), child);
+        }
+
         Ok(DeviceTreeNode {
             name,
             properties: property_map,
