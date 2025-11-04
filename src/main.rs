@@ -21,7 +21,7 @@ use aarch64_rt::entry;
 use buddy_system_allocator::LockedHeap;
 use core::arch::naked_asm;
 use log::{LevelFilter, info};
-use flat_device_tree::Fdt;
+use ritm_device_tree::Fdt;
 
 use crate::platform::{Platform, PlatformImpl};
 
@@ -54,9 +54,8 @@ fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     let fdt_address = x0 as *const u8;
     // SAFETY: We trust that the FDT pointer we were given is valid, and this is the only time we
     // use it.
-    let fdt = unsafe { Fdt::from_ptr(fdt_address).unwrap() };
-    info!("FDT size: {} bytes", fdt.total_size());
-    info!("FDT: {fdt:?}");
+    let fdt = unsafe { Fdt::from_raw(fdt_address).unwrap() };
+    info!("FDT: {fdt}");
 
     // SAFETY: We assume there's a valid executable at `NEXT_IMAGE`
     unsafe {

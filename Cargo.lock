@@ -79,12 +79,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
-name = "flat_device_tree"
-version = "3.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d29ba76ecf314f211601c5641d6fc4393d8f56a3b7764b3c8544639aad965a9"
-
-[[package]]
 name = "hashbrown"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -157,9 +151,9 @@ dependencies = [
  "arm-pl011-uart",
  "buddy_system_allocator",
  "embedded-io",
- "flat_device_tree",
  "log",
  "percore",
+ "ritm_device_tree",
  "safe-mmio",
  "smccc",
  "spin 0.10.0",

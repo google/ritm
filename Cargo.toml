@@ -24,8 +24,8 @@ buddy_system_allocator = { version = "0.11", default-features = false, features 
 embedded-io = "0.7"
 log = "0.4"
 percore = "0.2"
+ritm_device_tree = { path = "./ritm_device_tree", features = ["write"] }
 safe-mmio = "0.2"
 smccc = "0.2"
 spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-features = false }
 synopsys-dw-uart = "0.2"
-flat_device_tree = { version = "3", features = ["pretty-printing"] }
