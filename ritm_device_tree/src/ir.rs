@@ -308,3 +308,53 @@ impl DeviceTreeNodeBuilder {
         self.node
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_and_get_child() {
+        let mut root = DeviceTreeNode::new("root");
+        let child1 = DeviceTreeNode::new("child1");
+        let child2 = DeviceTreeNode::new("child2");
+
+        root.add_child(child1);
+        root.add_child(child2);
+
+        assert!(root.child("child1").is_some());
+        assert!(root.child("child2").is_some());
+        assert!(root.child("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_remove_child() {
+        let mut root = DeviceTreeNode::new("root");
+        let child1 = DeviceTreeNode::new("child1");
+        root.add_child(child1);
+
+        assert!(root.child("child1").is_some());
+        let removed_child = root.remove_child("child1");
+        assert!(removed_child.is_some());
+        assert!(root.child("child1").is_none());
+    }
+
+    #[test]
+    fn test_find_node_mut_with_children_map() {
+        let mut root = DeviceTreeNode::new("root");
+        let mut child1 = DeviceTreeNode::new("child1");
+        child1.add_child(DeviceTreeNode::new("grandchild1"));
+        root.add_child(child1);
+
+        let mut tree = DeviceTree::new(root);
+
+        let node = tree.find_node_mut("/child1").unwrap();
+        assert_eq!(node.name(), "child1");
+
+        let grandchild = tree.find_node_mut("/child1/grandchild1").unwrap();
+        assert_eq!(grandchild.name(), "grandchild1");
+
+        assert!(tree.find_node_mut("/child1/nonexistent").is_none());
+        assert!(tree.find_node_mut("/nonexistent").is_none());
+    }
+}
