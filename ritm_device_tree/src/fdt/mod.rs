@@ -6,17 +6,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! A read-only API for parsing and traversing a Flattened Device Tree (FDT).
+//! A read-only API for parsing and traversing a [Flattened Device Tree (FDT)].
 //!
 //! This module provides the [`Fdt`] struct, which is the entry point for
 //! parsing and traversing an FDT blob. The API is designed to be safe and
 //! efficient, performing no memory allocation and providing a zero-copy view
 //! of the FDT data.
+//! 
+//! [Flattened Device Tree (FDT)]: https://devicetree-specification.readthedocs.io/en/latest/chapter5-flattened-format.html
 
-use crate::{
-    error::{Error, ErrorKind},
-    node::FdtNode,
-};
+use crate::error::{Error, ErrorKind};
+mod node;
+mod property;
 use core::ffi::CStr;
 use core::fmt;
 use core::ptr;
@@ -27,6 +28,9 @@ use zerocopy::IntoBytes;
 use zerocopy::KnownLayout;
 use zerocopy::Unaligned;
 use zerocopy::byteorder::big_endian;
+
+pub use node::FdtNode;
+pub use property::FdtProperty;
 
 /// Version of the FDT specification supported by this library.
 const FDT_VERSION: u32 = 17;
@@ -141,8 +145,8 @@ impl<'a> Fdt<'a> {
     /// # Examples
     ///
     /// ```
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test.dtb");
     /// let fdt = Fdt::new(dtb).unwrap();
     /// ```
     pub fn new(data: &'a [u8]) -> Result<Self, Error> {
@@ -182,8 +186,8 @@ impl<'a> Fdt<'a> {
     /// # Examples
     ///
     /// ```no_run
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test.dtb");
     /// let ptr = dtb.as_ptr();
     /// let fdt = unsafe { Fdt::from_raw(ptr).unwrap() };
     /// ```
@@ -212,8 +216,8 @@ impl<'a> Fdt<'a> {
     /// # Examples
     ///
     /// ```
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test.dtb");
     /// let fdt = Fdt::new(dtb).unwrap();
     /// let root = fdt.root().unwrap();
     /// assert_eq!(root.name().unwrap(), "");
@@ -229,11 +233,19 @@ impl<'a> Fdt<'a> {
 
     /// Finds a node by its path.
     ///
+    /// # Performance
+    ///
+    /// This method traverses the device tree and its performance is linear in
+    /// the number of nodes in the path. If you need to call this often,
+    /// consider using [`DeviceTree::from_fdt`](crate::model::DeviceTree::from_fdt)
+    /// first. [`DeviceTree`](crate::model::DeviceTree) stores the nodes in a
+    /// hash map for constant-time lookup.
+    ///
     /// # Examples
     ///
     /// ```
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test_traversal.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test_traversal.dtb");
     /// let fdt = Fdt::new(dtb).unwrap();
     /// let node = fdt.find_node("/a/b/c").unwrap().unwrap();
     /// assert_eq!(node.name().unwrap(), "c");

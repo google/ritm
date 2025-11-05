@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use ritm_device_tree::Fdt;
+use ritm_device_tree::fdt::Fdt;
 
 #[test]
 fn read_child_nodes() {
@@ -73,11 +73,7 @@ fn get_property_by_name() {
     assert_eq!(prop.name(), "str-prop");
     assert_eq!(prop.as_str().unwrap(), "hello world");
 
-    assert!(
-        node.property("non-existent-prop")
-            .unwrap()
-            .is_none()
-    );
+    assert!(node.property("non-existent-prop").unwrap().is_none());
 }
 
 #[test]
@@ -113,7 +109,10 @@ fn children_nested() {
 
     let child1 = root.child("child1").unwrap().unwrap();
     let child2 = child1.child("child2").unwrap().unwrap();
-    let nested_properties: Vec<_> = child2.properties().map(|prop| prop.unwrap().name().to_owned()).collect();
+    let nested_properties: Vec<_> = child2
+        .properties()
+        .map(|prop| prop.unwrap().name().to_owned())
+        .collect();
     assert_eq!(nested_properties, vec!["prop2"]);
 }
 
@@ -163,7 +162,7 @@ fn round_trip() {
     ];
 
     for dtb in FILE_CONTENTS {
-        use ritm_device_tree::DeviceTree;
+        use ritm_device_tree::model::DeviceTree;
 
         let fdt = Fdt::new(dtb).unwrap();
         let ir = DeviceTree::from_fdt(&fdt).unwrap();

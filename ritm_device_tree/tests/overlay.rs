@@ -8,7 +8,7 @@
 
 #![cfg(feature = "write")]
 
-use ritm_device_tree::{DeviceTree, Fdt};
+use ritm_device_tree::{fdt::Fdt, model::DeviceTree};
 
 #[test]
 fn test_apply_overlay() {
@@ -16,7 +16,7 @@ fn test_apply_overlay() {
     let overlay_dtb = include_bytes!("../dtb/test_overlay.dtb");
     let merged_dtb = include_bytes!("../dtb/test_overlay_merged.dtb");
 
-    let mut base_fdt = Fdt::new(base_dtb).unwrap();
+    let base_fdt = Fdt::new(base_dtb).unwrap();
     let mut base_tree = DeviceTree::from_fdt(&base_fdt).unwrap();
 
     let overlay_fdt = Fdt::new(overlay_dtb).unwrap();

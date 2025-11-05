@@ -6,14 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Support for applying device tree overlays.
-//!
-//! This module provides the [`DeviceTree::apply_overlay`] method, which can be
-//! used to apply a device tree overlay to a base device tree.
-
 use crate::{
-    ir::{DeviceTree, DeviceTreeNode},
-    Error,
+    error::Error,
+    model::{DeviceTree, DeviceTreeNode},
 };
 use alloc::vec::Vec;
 
@@ -112,7 +107,7 @@ impl PhandleMap {
         }
     }
 
-    fn fixup_property(&mut self, prop: &mut crate::ir::DeviceTreeProperty) {
+    fn fixup_property(&mut self, prop: &mut crate::model::DeviceTreeProperty) {
         if prop.value().len() % 4 != 0 {
             return;
         }

@@ -7,9 +7,8 @@
 // except according to those terms.
 
 use crate::{
-    Fdt,
-    fdt::{FDT_BEGIN_NODE, FDT_END, FDT_END_NODE, FDT_MAGIC, FDT_PROP, FdtHeader},
-    ir::{DeviceTree, DeviceTreeNode, DeviceTreeProperty},
+    fdt::{FDT_BEGIN_NODE, FDT_END, FDT_END_NODE, FDT_MAGIC, FDT_PROP, Fdt, FdtHeader},
+    model::{DeviceTree, DeviceTreeNode, DeviceTreeProperty},
 };
 use alloc::{borrow::ToOwned, collections::btree_map::BTreeMap, string::String, vec::Vec};
 use zerocopy::IntoBytes;

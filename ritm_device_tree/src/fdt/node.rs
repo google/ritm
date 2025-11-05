@@ -8,12 +8,9 @@
 
 //! A read-only API for inspecting a device tree node.
 
-use crate::{
-    error::Error,
-    fdt::{FDT_TAGSIZE, Fdt, FdtToken},
-    property::FdtPropIter,
-    FdtProperty,
-};
+use super::{FDT_TAGSIZE, Fdt, FdtToken};
+use crate::error::Error;
+use crate::fdt::property::{FdtPropIter, FdtProperty};
 use core::fmt;
 
 /// A node in a flattened device tree.
@@ -29,8 +26,8 @@ impl<'a> FdtNode<'a> {
     /// # Examples
     ///
     /// ```
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test_children.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test_children.dtb");
     /// let fdt = Fdt::new(dtb).unwrap();
     /// let root = fdt.root().unwrap();
     /// let child = root.child("child1").unwrap().unwrap();
@@ -43,11 +40,20 @@ impl<'a> FdtNode<'a> {
 
     /// Returns a property by its name.
     ///
+    /// # Performance
+    ///
+    /// This method iterates through all properties of the node.
+    /// If you need to call this often, consider using
+    /// [`DeviceTree::from_fdt`](crate::model::DeviceTree::from_fdt) or
+    /// [`DeviceTreeNode::try_from`](crate::model::DeviceTreeNode::try_from)
+    /// first. [`DeviceTreeNode`](crate::model::DeviceTreeNode) stores
+    /// the properties in a hash map for constant-time lookup.
+    ///
     /// # Examples
     ///
     /// ```
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test_props.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test_props.dtb");
     /// let fdt = Fdt::new(dtb).unwrap();
     /// let node = fdt.find_node("/test-props").unwrap().unwrap();
     /// let prop = node.property("u32-prop").unwrap().unwrap();
@@ -68,8 +74,8 @@ impl<'a> FdtNode<'a> {
     /// # Examples
     ///
     /// ```
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test_props.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test_props.dtb");
     /// let fdt = Fdt::new(dtb).unwrap();
     /// let node = fdt.find_node("/test-props").unwrap().unwrap();
     /// let mut props = node.properties();
@@ -86,11 +92,20 @@ impl<'a> FdtNode<'a> {
 
     /// Returns a child node by its name.
     ///
+    /// # Performance
+    ///
+    /// This method's performance is linear in the number of children of this
+    /// node because it iterates through the children. If you need to call this
+    /// often, consider converting to a
+    /// [`DeviceTreeNode`](crate::model::DeviceTreeNode) first. Child lookup
+    /// on a [`DeviceTreeNode`](crate::model::DeviceTreeNode) is a
+    /// constant-time operation.
+    ///
     /// # Examples
     ///
     /// ```
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test_children.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test_children.dtb");
     /// let fdt = Fdt::new(dtb).unwrap();
     /// let root = fdt.root().unwrap();
     /// let child = root.child("child1").unwrap().unwrap();
@@ -111,8 +126,8 @@ impl<'a> FdtNode<'a> {
     /// # Examples
     ///
     /// ```
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test_children.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test_children.dtb");
     /// let fdt = Fdt::new(dtb).unwrap();
     /// let root = fdt.root().unwrap();
     /// let mut children = root.children();

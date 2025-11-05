@@ -8,10 +8,8 @@
 
 //! A read-only API for inspecting a device tree property.
 
-use crate::{
-    error::{Error, ErrorKind},
-    fdt::{FDT_TAGSIZE, Fdt, FdtToken},
-};
+use super::{FDT_TAGSIZE, Fdt, FdtToken};
+use crate::error::{Error, ErrorKind};
 use core::ffi::CStr;
 use core::fmt;
 use zerocopy::{FromBytes, big_endian};
@@ -39,8 +37,8 @@ impl<'a> FdtProperty<'a> {
     /// # Examples
     ///
     /// ```
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test_props.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test_props.dtb");
     /// let fdt = Fdt::new(dtb).unwrap();
     /// let node = fdt.find_node("/test-props").unwrap().unwrap();
     /// let prop = node.property("u32-prop").unwrap().unwrap();
@@ -57,8 +55,8 @@ impl<'a> FdtProperty<'a> {
     /// # Examples
     ///
     /// ```
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test_props.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test_props.dtb");
     /// let fdt = Fdt::new(dtb).unwrap();
     /// let node = fdt.find_node("/test-props").unwrap().unwrap();
     /// let prop = node.property("u64-prop").unwrap().unwrap();
@@ -75,8 +73,8 @@ impl<'a> FdtProperty<'a> {
     /// # Examples
     ///
     /// ```
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test_props.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test_props.dtb");
     /// let fdt = Fdt::new(dtb).unwrap();
     /// let node = fdt.find_node("/test-props").unwrap().unwrap();
     /// let prop = node.property("str-prop").unwrap().unwrap();
@@ -94,8 +92,8 @@ impl<'a> FdtProperty<'a> {
     /// # Examples
     ///
     /// ```
-    /// # use ritm_device_tree::Fdt;
-    /// # let dtb = include_bytes!("../dtb/test_props.dtb");
+    /// # use ritm_device_tree::fdt::Fdt;
+    /// # let dtb = include_bytes!("../../dtb/test_props.dtb");
     /// let fdt = Fdt::new(dtb).unwrap();
     /// let node = fdt.find_node("/test-props").unwrap().unwrap();
     /// let prop = node.property("str-list-prop").unwrap().unwrap();
@@ -211,17 +209,13 @@ impl<'a> FdtPropIter<'a> {
                         &fdt.data[*offset + FDT_TAGSIZE..],
                     ) {
                         Ok((val, _)) => val.get() as usize,
-                        Err(_) => {
-                            return Some(Err(Error::new(ErrorKind::InvalidLength, *offset)))
-                        }
+                        Err(_) => return Some(Err(Error::new(ErrorKind::InvalidLength, *offset))),
                     };
                     let nameoff = match big_endian::U32::ref_from_prefix(
                         &fdt.data[*offset + 2 * FDT_TAGSIZE..],
                     ) {
                         Ok((val, _)) => val.get() as usize,
-                        Err(_) => {
-                            return Some(Err(Error::new(ErrorKind::InvalidLength, *offset)))
-                        }
+                        Err(_) => return Some(Err(Error::new(ErrorKind::InvalidLength, *offset))),
                     };
                     let prop_offset = *offset + 3 * FDT_TAGSIZE;
                     *offset = Fdt::align_tag_offset(prop_offset + len);

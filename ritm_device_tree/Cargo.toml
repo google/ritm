@@ -2,13 +2,22 @@
 name = "ritm_device_tree"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0 OR MIT"
+rust-version = "1.88"
+description = "A library for parsing and manipulating Flattened Device Tree (FDT) blobs."
+repository = "https://github.com/google/ritm"
+homepage = "https://github.com/google/ritm"
+authors = ["Mateusz Maćkowski <mmac@google.com>"]
+categories = ["embedded", "encoding", "no-std::no-alloc", "parsing"]
+keywords = ["device-tree", "fdt", "dtb", "dts", "parser", "no_std"]
 
 [features]
 default = []
 alloc = []
-write = ["alloc"]
+std = ["alloc"]
+write = ["alloc", "dep:indexmap", "dep:twox-hash"]
 
 [dependencies]
-indexmap = { version = "2", default-features = false }
-twox-hash = { version = "2", features = ["xxhash64"], default-features = false }
+indexmap = { version = "2", optional = true, default-features = false }
+twox-hash = { version = "2", optional = true, features = ["xxhash64"], default-features = false }
 zerocopy = { version = "0.8", features = ["derive"] }

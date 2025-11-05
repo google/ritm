@@ -8,7 +8,7 @@
 
 #![cfg(feature = "write")]
 
-use ritm_device_tree::{DeviceTree, DeviceTreeNode, DeviceTreeNodeBuilder, DeviceTreeProperty};
+use ritm_device_tree::model::{DeviceTree, DeviceTreeNode, DeviceTreeProperty};
 
 #[test]
 fn tree_creation() {

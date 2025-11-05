@@ -21,7 +21,7 @@ use aarch64_rt::entry;
 use buddy_system_allocator::LockedHeap;
 use core::arch::naked_asm;
 use log::{LevelFilter, info};
-use ritm_device_tree::Fdt;
+use ritm_device_tree::fdt::Fdt;
 
 use crate::platform::{Platform, PlatformImpl};
 
