@@ -6,15 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::property::DeviceTreeProperty;
-use crate::{error::Error, fdt::FdtNode};
-use alloc::{
-    borrow::ToOwned,
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::borrow::ToOwned;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+
 use indexmap::IndexMap;
 use twox_hash::xxhash64;
+
+use super::property::DeviceTreeProperty;
+use crate::error::FdtError;
+use crate::fdt::FdtNode;
 
 /// A mutable, in-memory representation of a device tree node.
 ///
@@ -23,8 +24,8 @@ use twox_hash::xxhash64;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceTreeNode {
     name: String,
-    properties: IndexMap<String, DeviceTreeProperty, xxhash64::State>,
-    children: IndexMap<String, DeviceTreeNode, xxhash64::State>,
+    pub(super) properties: IndexMap<String, DeviceTreeProperty, xxhash64::State>,
+    pub(super) children: IndexMap<String, DeviceTreeNode, xxhash64::State>,
 }
 
 impl Default for DeviceTreeNode {
@@ -257,7 +258,7 @@ impl DeviceTreeNode {
 }
 
 impl<'a> TryFrom<FdtNode<'a>> for DeviceTreeNode {
-    type Error = Error;
+    type Error = FdtError;
 
     fn try_from(node: FdtNode<'a>) -> Result<Self, Self::Error> {
         let name = node.name()?.to_string();

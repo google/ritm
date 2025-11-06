@@ -13,13 +13,14 @@ use core::fmt;
 /// An error that can occur when parsing a device tree.
 #[derive(Debug)]
 #[non_exhaustive]
-pub struct Error {
+pub struct FdtError {
     offset: usize,
-    pub kind: ErrorKind,
+    /// The type of the error that has occurred.
+    pub kind: FdtErrorKind,
 }
 
-impl Error {
-    pub(crate) fn new(kind: ErrorKind, offset: usize) -> Self {
+impl FdtError {
+    pub(crate) fn new(kind: FdtErrorKind, offset: usize) -> Self {
         Self { offset, kind }
     }
 }
@@ -27,40 +28,45 @@ impl Error {
 /// The kind of an error that can occur when parsing a device tree.
 #[derive(Debug)]
 #[non_exhaustive]
-pub enum ErrorKind {
+pub enum FdtErrorKind {
     /// The magic number of the device tree is invalid.
     InvalidMagic,
     /// The Device Tree version is not supported by this library.
     UnsupportedVersion(u32),
     /// The length of the device tree is invalid.
     InvalidLength,
+    /// The header failed validation.
+    InvalidHeader(&'static str),
     /// An invalid token was encountered.
     BadToken(u32),
+    /// A read from data at invalid offset was attempted.
+    InvalidOffset,
     /// An invalid string was encountered.
     InvalidString,
-    /// An error occurred while applying an overlay.
-    OverlayError,
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for FdtError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} at offset {}", self.kind, self.offset)
     }
 }
 
-impl fmt::Display for ErrorKind {
+impl fmt::Display for FdtErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ErrorKind::InvalidMagic => write!(f, "invalid FDT magic number"),
-            ErrorKind::UnsupportedVersion(version) => {
-                write!(f, "the FDT version {} is not supported", version)
+            FdtErrorKind::InvalidMagic => write!(f, "invalid FDT magic number"),
+            FdtErrorKind::UnsupportedVersion(version) => {
+                write!(f, "the FDT version {version} is not supported")
             }
-            ErrorKind::InvalidLength => write!(f, "invalid FDT length"),
-            ErrorKind::BadToken(token) => write!(f, "bad FDT token: 0x{:x}", token),
-            ErrorKind::InvalidString => write!(f, "invalid string in FDT"),
-            ErrorKind::OverlayError => write!(f, "invalid overlay"),
+            FdtErrorKind::InvalidLength => write!(f, "invalid FDT length"),
+            FdtErrorKind::InvalidHeader(msg) => {
+                write!(f, "FDT header has failed validation: {msg}")
+            }
+            FdtErrorKind::BadToken(token) => write!(f, "bad FDT token: 0x{token:x}"),
+            FdtErrorKind::InvalidOffset => write!(f, "invalid offset in FDT"),
+            FdtErrorKind::InvalidString => write!(f, "invalid string in FDT"),
         }
     }
 }
 
-impl core::error::Error for Error {}
+impl core::error::Error for FdtError {}

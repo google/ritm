@@ -6,11 +6,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::{error::Error, fdt::FdtProperty};
-use alloc::{
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+use core::str;
+
+use crate::error::FdtError;
+use crate::fdt::FdtProperty;
+
+/// An error that can occur when parsing a property.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PropertyError {
+    /// The property's value has an invalid length for the requested conversion.
+    InvalidLength,
+    /// The property's value is not a valid string.
+    InvalidString,
+}
 
 /// A mutable, in-memory representation of a device tree property.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,12 +83,16 @@ impl DeviceTreeProperty {
     /// let prop = DeviceTreeProperty::new("my-prop", 1234u32.to_be_bytes());
     /// assert_eq!(prop.as_u32(), Ok(1234));
     /// ```
-    pub fn as_u32(&self) -> Result<u32, ()> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the property's value is not 4 bytes long.
+    pub fn as_u32(&self) -> Result<u32, PropertyError> {
         self.value
             .as_slice()
             .try_into()
             .map(u32::from_be_bytes)
-            .map_err(|_| ())
+            .map_err(|_| PropertyError::InvalidLength)
     }
 
     /// Returns the value of this property as a string.
@@ -90,15 +104,18 @@ impl DeviceTreeProperty {
     /// let prop = DeviceTreeProperty::new("my-prop", "hello");
     /// assert_eq!(prop.as_str(), Ok("hello"));
     /// ```
-    pub fn as_str(&self) -> Result<&str, ()> {
-        core::str::from_utf8(&self.value)
+    /// # Errors
+    ///
+    /// Returns an error if the property's value is not a valid UTF-8 string.
+    pub fn as_str(&self) -> Result<&str, PropertyError> {
+        str::from_utf8(&self.value)
             .map(|s| s.trim_end_matches('\0'))
-            .map_err(|_| ())
+            .map_err(|_| PropertyError::InvalidString)
     }
 }
 
 impl<'a> TryFrom<FdtProperty<'a>> for DeviceTreeProperty {
-    type Error = Error;
+    type Error = FdtError;
 
     fn try_from(prop: FdtProperty<'a>) -> Result<Self, Self::Error> {
         let name = prop.name().to_string();

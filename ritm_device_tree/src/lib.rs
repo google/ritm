@@ -51,8 +51,8 @@
 //! # Examples
 //!
 //! ```
-//! use ritm_device_tree::model::{DeviceTree, DeviceTreeNode, DeviceTreeProperty};
 //! use ritm_device_tree::fdt::Fdt;
+//! use ritm_device_tree::model::{DeviceTree, DeviceTreeNode, DeviceTreeProperty};
 //!
 //! // Create a new device tree from scratch.
 //! let mut tree = DeviceTree::new(DeviceTreeNode::new("/"));
@@ -73,26 +73,25 @@
 //! let child_node = fdt.find_node("/child").unwrap().unwrap();
 //! let prop = child_node.property("my-property").unwrap().unwrap();
 //! assert_eq!(prop.as_str().unwrap(), "hello");
-//! 
+//!
 //! // Display the DTS
 //! println!("{}", fdt);
 //! ```
 
 #![no_std]
+#![warn(missing_docs, rustdoc::missing_crate_level_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+
+pub mod memreserve;
+pub use memreserve::MemoryReservation;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
-
-/// An alias for [`Result`](core::result::Result) with [`crate::error::Error`].
-pub type Result<T> = core::result::Result<T, error::Error>;
 
 pub mod error;
 pub mod fdt;
 #[cfg(feature = "write")]
 #[cfg_attr(docsrs, doc(cfg(feature = "write")))]
 pub mod model;
-#[cfg(feature = "write")]
-mod overlay;
 #[cfg(feature = "write")]
 mod writer;

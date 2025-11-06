@@ -6,12 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::{
-    fdt::{FDT_BEGIN_NODE, FDT_END, FDT_END_NODE, FDT_MAGIC, FDT_PROP, Fdt, FdtHeader},
-    model::{DeviceTree, DeviceTreeNode, DeviceTreeProperty},
-};
-use alloc::{borrow::ToOwned, collections::btree_map::BTreeMap, string::String, vec::Vec};
+use alloc::borrow::ToOwned;
+use alloc::collections::btree_map::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
+
 use zerocopy::IntoBytes;
+
+use crate::MemoryReservation;
+use crate::fdt::{FDT_BEGIN_NODE, FDT_END, FDT_END_NODE, FDT_MAGIC, FDT_PROP, Fdt, FdtHeader};
+use crate::model::{DeviceTree, DeviceTreeNode, DeviceTreeProperty};
 
 // TODO: check for invalid characters according to https://devicetree-specification.readthedocs.io/en/latest/chapter2-devicetree-basics.html?highlight=ascii#node-name-characters
 
@@ -20,13 +24,10 @@ const LAST_VERSION: u32 = 17;
 const LAST_COMP_VERSION: u32 = 16;
 
 pub(crate) fn to_bytes(tree: &DeviceTree) -> Vec<u8> {
-    let mut memory_reservations = Vec::new();
-    memory_reservations.extend_from_slice(&0u64.to_be_bytes());
-    memory_reservations.extend_from_slice(&0u64.to_be_bytes());
-
+    let memory_reservations = write_memory_reservations(&tree.memory_reservations);
     let (struct_block, strings_block) = write_root(tree.root());
 
-    let off_mem_rsvmap = core::mem::size_of::<FdtHeader>();
+    let off_mem_rsvmap = size_of::<FdtHeader>();
     let off_dt_struct = off_mem_rsvmap + memory_reservations.len();
     let off_dt_strings = off_dt_struct + struct_block.len();
     let totalsize = off_dt_strings + strings_block.len();
@@ -36,20 +37,32 @@ pub(crate) fn to_bytes(tree: &DeviceTree) -> Vec<u8> {
     // Header
     let header = FdtHeader {
         magic: FDT_MAGIC.into(),
-        totalsize: (totalsize as u32).into(),
-        off_dt_struct: (off_dt_struct as u32).into(),
-        off_dt_strings: (off_dt_strings as u32).into(),
-        off_mem_rsvmap: (off_mem_rsvmap as u32).into(),
+        totalsize: u32::try_from(totalsize)
+            .expect("totalsize exceeds u32")
+            .into(),
+        off_dt_struct: u32::try_from(off_dt_struct)
+            .expect("off_dt_struct exceeds u32")
+            .into(),
+        off_dt_strings: u32::try_from(off_dt_strings)
+            .expect("off_dt_strings exceeds u32")
+            .into(),
+        off_mem_rsvmap: u32::try_from(off_mem_rsvmap)
+            .expect("off_mem_rsvmap exceeds u32")
+            .into(),
         version: LAST_VERSION.into(),
         last_comp_version: LAST_COMP_VERSION.into(),
         boot_cpuid_phys: 0u32.into(),
-        size_dt_strings: (strings_block.len() as u32).into(),
-        size_dt_struct: (struct_block.len() as u32).into(),
+        size_dt_strings: u32::try_from(strings_block.len())
+            .expect("size_dt_strings exceeds u32")
+            .into(),
+        size_dt_struct: u32::try_from(struct_block.len())
+            .expect("size_dt_struct exceeds u32")
+            .into(),
     };
     dtb.extend_from_slice(header.as_bytes());
     assert_eq!(
         dtb.len(),
-        core::mem::size_of::<FdtHeader>(),
+        size_of::<FdtHeader>(),
         "invalid header size after writing"
     );
 
@@ -63,6 +76,17 @@ pub(crate) fn to_bytes(tree: &DeviceTree) -> Vec<u8> {
     dtb.extend_from_slice(&strings_block);
 
     dtb
+}
+
+fn write_memory_reservations(reservations: &[MemoryReservation]) -> Vec<u8> {
+    let mut memory_reservations = Vec::new();
+    for reservation in reservations {
+        memory_reservations.extend_from_slice(&reservation.address().to_be_bytes());
+        memory_reservations.extend_from_slice(&reservation.size().to_be_bytes());
+    }
+    memory_reservations.extend_from_slice(&0u64.to_be_bytes());
+    memory_reservations.extend_from_slice(&0u64.to_be_bytes());
+    memory_reservations
 }
 
 fn write_root(root_node: &DeviceTreeNode) -> (Vec<u8>, Vec<u8>) {
@@ -112,7 +136,7 @@ fn write_prop(
     let name_offset = if let Some(offset) = string_map.get(prop.name()) {
         *offset
     } else {
-        let offset = strings_block.len() as u32;
+        let offset = u32::try_from(strings_block.len()).expect("string block length exceeds u32");
         strings_block.extend_from_slice(prop.name().as_bytes());
         strings_block.push(0);
         string_map.insert(prop.name().to_owned(), offset);
@@ -120,7 +144,11 @@ fn write_prop(
     };
 
     struct_block.extend_from_slice(&FDT_PROP.to_be_bytes());
-    struct_block.extend_from_slice(&(prop.value().len() as u32).to_be_bytes());
+    struct_block.extend_from_slice(
+        &u32::try_from(prop.value().len())
+            .expect("property value length exceeds u32")
+            .to_be_bytes(),
+    );
     struct_block.extend_from_slice(&name_offset.to_be_bytes());
     struct_block.extend_from_slice(prop.value());
     align(struct_block);

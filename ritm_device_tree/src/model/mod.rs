@@ -13,10 +13,14 @@
 //! device tree in memory. The [`DeviceTree`] can then be serialized to a
 //! flattened device tree blob.
 
-use crate::{error::Error, fdt::Fdt, writer};
 use alloc::vec::Vec;
 use core::fmt::Display;
+
+use crate::error::FdtError;
+use crate::fdt::Fdt;
+use crate::{MemoryReservation, writer};
 mod node;
+mod overlay;
 mod property;
 pub use node::{DeviceTreeNode, DeviceTreeNodeBuilder};
 pub use property::DeviceTreeProperty;
@@ -37,7 +41,9 @@ pub use property::DeviceTreeProperty;
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceTree {
-    root: DeviceTreeNode,
+    pub(self) root: DeviceTreeNode,
+    /// The memory reservations for this device tree.
+    pub memory_reservations: Vec<MemoryReservation>,
 }
 
 impl DeviceTree {
@@ -50,8 +56,12 @@ impl DeviceTree {
     /// let root = DeviceTreeNode::new("/");
     /// let tree = DeviceTree::new(root);
     /// ```
+    #[must_use]
     pub fn new(root: DeviceTreeNode) -> Self {
-        Self { root }
+        Self {
+            root,
+            memory_reservations: Vec::new(),
+        }
     }
 
     /// Creates a new `DeviceTree` from a `Fdt`.
@@ -64,17 +74,31 @@ impl DeviceTree {
     /// let fdt = Fdt::new(dtb).unwrap();
     /// let tree = DeviceTree::from_fdt(&fdt).unwrap();
     /// ```
-    pub fn from_fdt(fdt: &Fdt) -> Result<Self, Error> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the root node of the `Fdt` cannot be parsed.
+    pub fn from_fdt(fdt: &Fdt<'_>) -> Result<Self, FdtError> {
         let root = DeviceTreeNode::try_from(fdt.root()?)?;
-        Ok(DeviceTree { root })
+        Ok(DeviceTree {
+            root,
+            memory_reservations: fdt.memory_reservations().collect(),
+        })
     }
 
     /// Serializes the `DeviceTree` to a flattened device tree blob.
+    ///
+    /// # Panics
+    ///
+    /// This may panic if any of the lengths written to the DTB (block sizes,
+    /// property value length, etc.) exceed [`u32::MAX`].
+    #[must_use]
     pub fn to_dtb(&self) -> Vec<u8> {
         writer::to_bytes(self)
     }
 
     /// Returns a reference to the root node of the device tree.
+    #[must_use]
     pub fn root(&self) -> &DeviceTreeNode {
         &self.root
     }

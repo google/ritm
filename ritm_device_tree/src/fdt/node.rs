@@ -8,13 +8,14 @@
 
 //! A read-only API for inspecting a device tree node.
 
-use super::{FDT_TAGSIZE, Fdt, FdtToken};
-use crate::error::Error;
-use crate::fdt::property::{FdtPropIter, FdtProperty};
 use core::fmt;
 
+use super::{FDT_TAGSIZE, Fdt, FdtToken};
+use crate::error::FdtError;
+use crate::fdt::property::{FdtPropIter, FdtProperty};
+
 /// A node in a flattened device tree.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct FdtNode<'a> {
     pub(crate) fdt: &'a Fdt<'a>,
     pub(crate) offset: usize,
@@ -22,6 +23,16 @@ pub struct FdtNode<'a> {
 
 impl<'a> FdtNode<'a> {
     /// Returns the name of this node.
+    ///
+    /// # Examples
+    ///
+    /// # Errors
+    ///
+    /// Returns an
+    /// [`FdtErrorKind::InvalidOffset`](crate::error::FdtErrorKind::InvalidOffset)
+    /// if the name offset is invalid or an
+    /// [`FdtErrorKind::InvalidString`](crate::error::FdtErrorKind::InvalidString) if the string at the offset is not null-terminated
+    /// or contains invalid UTF-8.
     ///
     /// # Examples
     ///
@@ -33,7 +44,7 @@ impl<'a> FdtNode<'a> {
     /// let child = root.child("child1").unwrap().unwrap();
     /// assert_eq!(child.name().unwrap(), "child1");
     /// ```
-    pub fn name(&self) -> Result<&'a str, Error> {
+    pub fn name(&self) -> Result<&'a str, FdtError> {
         let name_offset = self.offset + FDT_TAGSIZE;
         self.fdt.string_at_offset(name_offset, None)
     }
@@ -59,7 +70,11 @@ impl<'a> FdtNode<'a> {
     /// let prop = node.property("u32-prop").unwrap().unwrap();
     /// assert_eq!(prop.name(), "u32-prop");
     /// ```
-    pub fn property(&self, name: &str) -> crate::Result<Option<FdtProperty<'a>>> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a property's name or value cannot be read.
+    pub fn property(&self, name: &str) -> Result<Option<FdtProperty<'a>>, FdtError> {
         for property in self.properties() {
             let property = property?;
             if property.name() == name {
@@ -83,7 +98,7 @@ impl<'a> FdtNode<'a> {
     /// assert_eq!(props.next().unwrap().unwrap().name(), "u64-prop");
     /// assert_eq!(props.next().unwrap().unwrap().name(), "str-prop");
     /// ```
-    pub fn properties(&self) -> impl Iterator<Item = crate::Result<FdtProperty<'a>>> + use<'a> {
+    pub fn properties(&self) -> impl Iterator<Item = Result<FdtProperty<'a>, FdtError>> + use<'a> {
         FdtPropIter::Start {
             fdt: self.fdt,
             offset: self.offset,
@@ -101,6 +116,10 @@ impl<'a> FdtNode<'a> {
     /// on a [`DeviceTreeNode`](crate::model::DeviceTreeNode) is a
     /// constant-time operation.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if a child node's name cannot be read.
+    ///
     /// # Examples
     ///
     /// ```
@@ -111,7 +130,7 @@ impl<'a> FdtNode<'a> {
     /// let child = root.child("child1").unwrap().unwrap();
     /// assert_eq!(child.name().unwrap(), "child1");
     /// ```
-    pub fn child(&self, name: &str) -> crate::Result<Option<FdtNode<'a>>> {
+    pub fn child(&self, name: &str) -> Result<Option<FdtNode<'a>>, FdtError> {
         for child in self.children() {
             let child = child?;
             if child.name()? == name {
@@ -135,7 +154,7 @@ impl<'a> FdtNode<'a> {
     /// assert_eq!(children.next().unwrap().unwrap().name().unwrap(), "child2");
     /// assert!(children.next().is_none());
     /// ```
-    pub fn children(&self) -> impl Iterator<Item = crate::Result<FdtNode<'a>>> + use<'a> {
+    pub fn children(&self) -> impl Iterator<Item = Result<FdtNode<'a>, FdtError>> + use<'a> {
         FdtChildIter::Start {
             fdt: self.fdt,
             offset: self.offset,
@@ -150,7 +169,9 @@ impl<'a> FdtNode<'a> {
             writeln!(f, "{:indent$}{} {{", "", name, indent = indent)?;
         }
 
+        let mut has_properties = false;
         for prop in self.properties() {
+            has_properties = true;
             match prop {
                 Ok(prop) => prop.fmt(f, indent + 4)?,
                 Err(_e) => {
@@ -159,8 +180,13 @@ impl<'a> FdtNode<'a> {
             }
         }
 
+        let mut first_child = true;
         for child in self.children() {
-            writeln!(f)?;
+            if !first_child || has_properties {
+                writeln!(f)?;
+            }
+
+            first_child = false;
             match child {
                 Ok(child) => child.fmt_recursive(f, indent + 4)?,
                 Err(_e) => {
@@ -181,7 +207,7 @@ enum FdtChildIter<'a> {
 }
 
 impl<'a> Iterator for FdtChildIter<'a> {
-    type Item = crate::Result<FdtNode<'a>>;
+    type Item = Result<FdtNode<'a>, FdtError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
@@ -213,7 +239,7 @@ impl<'a> Iterator for FdtChildIter<'a> {
 }
 
 impl<'a> FdtChildIter<'a> {
-    fn try_next(fdt: &'a Fdt<'a>, offset: &mut usize) -> Option<crate::Result<FdtNode<'a>>> {
+    fn try_next(fdt: &'a Fdt<'a>, offset: &mut usize) -> Option<Result<FdtNode<'a>, FdtError>> {
         loop {
             let token = match fdt.read_token(*offset) {
                 Ok(token) => token,
@@ -231,15 +257,14 @@ impl<'a> FdtChildIter<'a> {
                         offset: node_offset,
                     }));
                 }
-                FdtToken::EndNode => return None,
                 FdtToken::Prop => {
                     *offset = match fdt.next_property_offset(*offset + FDT_TAGSIZE) {
                         Ok(offset) => offset,
                         Err(e) => return Some(Err(e)),
                     };
                 }
+                FdtToken::EndNode | FdtToken::End => return None,
                 FdtToken::Nop => *offset += FDT_TAGSIZE,
-                _ => return None,
             }
         }
     }

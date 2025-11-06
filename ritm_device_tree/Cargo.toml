@@ -21,3 +21,21 @@ write = ["alloc", "dep:indexmap", "dep:twox-hash"]
 indexmap = { version = "2", optional = true, default-features = false }
 twox-hash = { version = "2", optional = true, features = ["xxhash64"], default-features = false }
 zerocopy = { version = "0.8", features = ["derive"] }
+
+[lints.rust]
+deprecated-safe = "warn"
+keyword-idents = "warn"
+missing_copy_implementations = "warn"
+missing_debug_implementations = "warn"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+unreachable_pub = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+unstable_features = "warn"
+unused_import_braces = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = "warn"
+undocumented_unsafe_blocks = "deny"

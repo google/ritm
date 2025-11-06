@@ -153,12 +153,17 @@ fn pretty_print() {
 #[test]
 #[cfg(feature = "write")]
 fn round_trip() {
-    const FILE_CONTENTS: [&'static [u8]; 5] = [
-        include_bytes!("../dtb/test.dtb"),
-        include_bytes!("../dtb/test_traversal.dtb"),
-        include_bytes!("../dtb/test_props.dtb"),
+    const FILE_CONTENTS: [&'static [u8]; 10] = [
+        include_bytes!("../dtb/test_children_nested.dtb"),
         include_bytes!("../dtb/test_children.dtb"),
+        include_bytes!("../dtb/test_memreserve.dtb"),
+        include_bytes!("../dtb/test_overlay_base.dtb"),
+        include_bytes!("../dtb/test_overlay_merged.dtb"),
+        include_bytes!("../dtb/test_overlay.dtb"),
         include_bytes!("../dtb/test_pretty_print.dtb"),
+        include_bytes!("../dtb/test_props.dtb"),
+        include_bytes!("../dtb/test_traversal.dtb"),
+        include_bytes!("../dtb/test.dtb"),
     ];
 
     for dtb in FILE_CONTENTS {
