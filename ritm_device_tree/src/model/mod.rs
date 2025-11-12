@@ -18,7 +18,8 @@ use core::fmt::Display;
 
 use crate::error::FdtError;
 use crate::fdt::Fdt;
-use crate::{MemoryReservation, writer};
+use crate::memreserve::MemoryReservation;
+use crate::writer;
 mod node;
 mod overlay;
 mod property;
@@ -145,6 +146,6 @@ impl DeviceTree {
 
 impl Display for DeviceTree {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        Fdt::new(&self.to_dtb()).unwrap().fmt(f)
+        Fdt::new(&self.to_dtb()).expect("DeviceTree::to_dtb() should always generate a valid FDT").fmt(f)
     }
 }

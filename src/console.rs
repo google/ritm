@@ -81,7 +81,7 @@ fn panic(info: &PanicInfo) -> ! {
             let _ = writeln!(console.console.borrow(token).lock(), "{info}");
         });
     }
-    system_off::<Smc>().unwrap();
+    system_off::<Smc>().expect("system_off failed");
 
     loop {}
 }

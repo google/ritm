@@ -18,14 +18,33 @@ categories = ["embedded", "no-std"]
 
 [dependencies]
 aarch64-paging = { version = "0.10", default-features = false }
-aarch64-rt = { version = "0.2", features = ["el2", "exceptions", "initial-pagetable", "psci"], default-features = false }
+aarch64-rt = { version = "0.3.1", features = ["el2", "exceptions", "initial-pagetable", "psci"], default-features = false }
 arm-pl011-uart = "0.4"
 buddy_system_allocator = { version = "0.11", default-features = false, features = ["alloc", "use_spin"] }
 embedded-io = "0.7"
 log = "0.4"
 percore = "0.2"
-ritm_device_tree = { path = "./ritm_device_tree", features = ["write"] }
+ritm_device_tree = { git = "./ritm_device_tree", features = ["write"] }
 safe-mmio = "0.2"
 smccc = "0.2"
 spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-features = false }
 synopsys-dw-uart = "0.2"
+
+[patch.crates-io]
+aarch64-rt = { git = "https://github.com/m4tx/aarch64-rt.git", rev = "a93fdb00baa88549c7e9c90a4dd1c66b164844bf" }
+
+[lints.rust]
+deprecated-safe = "warn"
+keyword-idents = "warn"
+trivial_casts = "warn"
+trivial_numeric_casts = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+unstable_features = "warn"
+unused_import_braces = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "deny"
+unwrap_used = "warn"

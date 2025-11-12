@@ -155,7 +155,7 @@ impl PhandleMap {
         prop: &mut crate::model::DeviceTreeProperty,
         node_name: &str,
     ) -> Result<(), OverlayError> {
-        if prop.value().len() % 4 != 0 {
+        if !prop.value().len().is_multiple_of(4) {
             return Ok(());
         }
 

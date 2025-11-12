@@ -13,8 +13,8 @@ use alloc::vec::Vec;
 
 use zerocopy::IntoBytes;
 
-use crate::MemoryReservation;
 use crate::fdt::{FDT_BEGIN_NODE, FDT_END, FDT_END_NODE, FDT_MAGIC, FDT_PROP, Fdt, FdtHeader};
+use crate::memreserve::MemoryReservation;
 use crate::model::{DeviceTree, DeviceTreeNode, DeviceTreeProperty};
 
 // TODO: check for invalid characters according to https://devicetree-specification.readthedocs.io/en/latest/chapter2-devicetree-basics.html?highlight=ascii#node-name-characters

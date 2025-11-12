@@ -39,3 +39,4 @@ unused_qualifications = "warn"
 all = { level = "deny", priority = -1 }
 pedantic = "warn"
 undocumented_unsafe_blocks = "deny"
+unwrap_used = "warn"

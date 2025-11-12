@@ -83,7 +83,6 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub mod memreserve;
-pub use memreserve::MemoryReservation;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;

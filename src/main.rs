@@ -11,228 +11,185 @@
 #![deny(clippy::undocumented_unsafe_blocks)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+extern crate alloc;
+
+mod arch;
 mod console;
 mod exceptions;
 mod logger;
 mod pagetable;
 mod platform;
 
+use aarch64_paging::paging::PAGE_SIZE;
 use aarch64_rt::entry;
-use buddy_system_allocator::LockedHeap;
+use buddy_system_allocator::{Heap, LockedHeap};
 use core::arch::naked_asm;
+use core::ops::DerefMut;
 use log::{LevelFilter, info};
 use ritm_device_tree::fdt::Fdt;
+use spin::mutex::{SpinMutex, SpinMutexGuard};
 
 use crate::platform::{Platform, PlatformImpl};
 
 const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 const BOOT_KERNEL_AT_EL1: bool = false;
 
+const HEAP_SIZE: usize = 40 * PAGE_SIZE;
+#[unsafe(no_mangle)]
+#[unsafe(link_section = ".heap")]
+static HEAP: SpinMutex<[u8; HEAP_SIZE]> = SpinMutex::new([0; HEAP_SIZE]);
+
 #[global_allocator]
 static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
 
-#[repr(align(0x200000))]
+#[repr(align(4096))]
 struct AlignImage<T>(T);
 
 // Payload path here
-static NEXT_IMAGE: AlignImage<[u8; 38373888]> = AlignImage(*include_bytes!(
-    "/usr/local/google/home/mmac/code/common-android16-6.12/common/arch/arm64/boot/Image"
+#[unsafe(link_section = ".payload")]
+// static NEXT_IMAGE: AlignImage<[u8; 38373888]> = AlignImage(*include_bytes!(
+//     "/usr/local/google/home/mmac/code/common-android16-6.12/common/arch/arm64/boot/Image"
+// ));
+static NEXT_IMAGE: AlignImage<[u8; 18_815_488]> = AlignImage(*include_bytes!(
+    "/usr/local/google/home/mmac/code/linux/arch/arm64/boot/Image"
 ));
 
 entry!(main);
 fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     // SAFETY: We only call `PlatformImpl::create` here, once on boot.
     let mut platform = unsafe { PlatformImpl::create() };
-    let parts = platform.parts().unwrap();
+    let parts = platform.parts().expect("could not get platform parts");
 
     let console = console::init(parts.console);
-    logger::init(console.shared(), LOG_LEVEL).unwrap();
+    logger::init(console.shared(), LOG_LEVEL).expect("failed to init logger");
 
     info!("starting ritm");
     info!("main({x0:#x}, {x1:#x}, {x2:#x}, {x3:#x})");
 
+    // Give the allocator some memory to allocate.
+    add_to_heap(
+        HEAP_ALLOCATOR.lock().deref_mut(),
+        SpinMutexGuard::leak(HEAP.try_lock().expect("failed to lock heap")).as_mut_slice(),
+    );
+
     let fdt_address = x0 as *const u8;
     // SAFETY: We trust that the FDT pointer we were given is valid, and this is the only time we
     // use it.
-    let fdt = unsafe { Fdt::from_raw(fdt_address).unwrap() };
+    // SAFETY: fdt_address is a valid pointer to a device tree.
+    let fdt: Fdt<'_> = unsafe { Fdt::from_raw(fdt_address).expect("fdt_address is not a valid fdt") };
     info!("FDT: {fdt}");
+
+    let new_fdt = platform.modify_dt(fdt);
+    let dtb_ptr = new_fdt.data().as_ptr() as u64;
 
     // SAFETY: We assume there's a valid executable at `NEXT_IMAGE`
     unsafe {
         if BOOT_KERNEL_AT_EL1 {
-            run_payload_el1(x0, x1, x2, x3)
+            run_payload_el1(dtb_ptr, x1, x2, x3)
         } else {
-            run_payload_el2(x0, x1, x2, x3)
+            run_payload_el2(dtb_ptr, x1, x2, x3)
         }
     }
 }
 
-#[unsafe(naked)]
-#[rustfmt::skip]
-unsafe extern "C" fn run_payload_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
-    naked_asm!(
-        // Disable MMU and caches
-        "mrs x5, sctlr_el2",
-        "bic x5, x5, #(1 << 0)",   // MMU disable
-        "bic x5, x5, #(1 << 2)",   // Data Cache disable
-        "bic x5, x5, #(1 << 12)",  // Instruction Cache Disable
-        "msr sctlr_el2, x5",
-        "isb",
-        "dsb sy",
+/// Adds the given memory range to the given heap.
+fn add_to_heap<const ORDER: usize>(heap: &mut Heap<ORDER>, range: &'static mut [u8]) {
+    // SAFETY: The range we pass is valid because it comes from a mutable static reference, which it
+    // effectively takes ownership of.
+    unsafe {
+        heap.init(range.as_mut_ptr() as usize, range.len());
+    }
+}
 
-        // Invalidate D-cache by set/way to the point of coherency
-        "mrs x5, clidr_el1",      // x5 = CLIDR
-        "and x6, x5, #0x7000000", // x6 = LoC
-        "lsr x6, x6, #23",
-        "cbz x6, 2f",             // if LoC is 0, then no need to clean
-        "mov x10, #0",            // x10 = cache level * 2
+fn disable_mmu_and_caches() {
+    // Disable MMU and caches
+    let mut sctlr = arch::sctlr_el2::read();
+    sctlr &= !arch::sctlr_el2::M;
+    sctlr &= !arch::sctlr_el2::C;
+    sctlr &= !arch::sctlr_el2::I;
+    arch::sctlr_el2::write(sctlr);
+    arch::isb();
+    arch::dsb();
 
-        // loop over cache levels
-        "1:",
-            "add x12, x10, x10, lsr #1", // x12 = level * 3
-            "lsr x11, x5, x12",
-            "and x11, x11, #7",          // x11 = cache type
-            "cmp x11, #2",               // is it a data or unified cache?
-            "b.lt 3f",                   // if not, skip to next level
-            "msr csselr_el1, x10",       // select cache level
-            "isb",                       // sync change of csselr
-            "mrs x11, ccsidr_el1",       // x11 = ccsidr
-            "and x12, x11, #7",          // x12 = log2(line size) - 4
-            "add x12, x12, #4",          // x12 = log2(line size)
-            "and x13, x11, #0x3ff",      // x13 = (number of ways - 1)
-            "and x14, x11, #0x7fff000",  // x14 = (number of sets - 1)
-            "lsr x14, x14, #13",
-            "clz w15, w13",              // w15 = 31 - log2(ways)
-            // loop over ways
-            "4:",
-                "mov x9, x14",           // x9 = set number
-                // loop over sets
-                "5:",
-                    "lsl x7, x13, x15",
-                    "lsl x8, x9, x12",
-                    "orr x11, x10, x7",  // x11 = (level << 1) | (way << ...)
-                    "orr x11, x11, x8",  // x11 |= (set << log2(line size))
-                    "dc isw, x11",       // invalidate by set/way
-                    "subs x9, x9, #1",
-                    "b.ge 5b",
-                    "subs x13, x13, #1",
-                    "b.ge 4b",
-            "3:",
-                "add x10, x10, #2",      // next cache level
-                "cmp x6, x10",
-                "b.gt 1b",
-    "2:",
-        "dsb sy",
-        "isb",
+    arch::invalidate_dcache();
 
-        // Invalidate I-cache
-        "ic iallu",
-        "tlbi alle2is",
+    arch::dsb();
+    arch::isb();
 
-        // Final synchronization
-        "dsb ish",
-        "isb",
+    // Invalidate I-cache
+    arch::ic_iallu();
+    arch::tlbi_alle2is();
 
-        // Setup EL1
-        // EL1 is AArch64
-        "mov x5, #(1 << 31)",
-        "orr x5, x5, #(1 << 19)",
-        "orr x5, x5, #(1 << 4)",
-        "msr hcr_el2, x5",
-
-        // Allow access to timers
-        "mov x5, #3",
-        "msr cnthctl_el2, x5",
-
-        // Setup SPSR_EL2 to enter EL1h
-        // Mask debug, SError, IRQ, and FIQ
-        "mov x5, #(0b1111 << 6)",
-        // EL1h
-        "mov x6, #5",
-        "orr x5, x5, x6",
-        "msr spsr_el2, x5",
-
-        // Set ELR_EL2 to the kernel entry point
-        "ldr x5, ={next_image}",
-        "msr elr_el2, x5",
-
-        // Set stack pointer for EL1
-        "mov x5, sp",
-        "msr sp_el1, x5",
-
-        "eret",
-        next_image = sym crate::NEXT_IMAGE
-    )
+    // Final synchronization
+    arch::dsb_ish();
+    arch::isb();
 }
 
 #[unsafe(naked)]
-#[rustfmt::skip]
-unsafe extern "C" fn run_payload_el2(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
+unsafe extern "C" fn eret_to_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
+    naked_asm!("eret");
+}
+
+/// Run the payload at EL1.
+///
+/// # Safety
+///
+/// `NEXT_IMAGE` must point to a valid executable piece of code which never returns.
+unsafe fn run_payload_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
+    disable_mmu_and_caches();
+
+    // Setup EL1
+    // EL1 is AArch64
+    let mut hcr = arch::hcr_el2::read();
+    hcr |= arch::hcr_el2::RW;
+    hcr |= arch::hcr_el2::TID1;
+    hcr &= !arch::hcr_el2::AMO;
+    arch::hcr_el2::write(hcr);
+
+    //todo
+    arch::cntvoff_el2::write(0);
+
+    // Allow access to timers
+    arch::cnthctl_el2::write(3);
+
+    // Setup SPSR_EL2 to enter EL1h
+    // Mask debug, SError, IRQ, and FIQ
+    let mut spsr = arch::spsr_el2::read();
+    spsr |= arch::spsr_el2::MASK_ALL;
+    spsr |= arch::spsr_el2::EL1H;
+    arch::spsr_el2::write(spsr);
+
+    // Set ELR_EL2 to the kernel entry point
+    arch::elr_el2::write(NEXT_IMAGE.0.as_ptr() as u64);
+
+    // Set stack pointer for EL1
+    arch::sp_el1::write(arch::sp());
+
+    info!("Exiting to EL1.");
+
+    // SAFETY: This is a call to the hypervisor, which is safe.
+    unsafe {
+        eret_to_el1(x0, x1, x2, x3);
+    }
+}
+
+#[unsafe(naked)]
+unsafe extern "C" fn jump_to_payload(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     naked_asm!(
-        // Disable MMU and caches
-        "mrs x5, sctlr_el2",
-        "bic x5, x5, #(1 << 0)",   // MMU disable
-        "bic x5, x5, #(1 << 2)",   // Data Cache disable
-        "bic x5, x5, #(1 << 12)",  // Instruction Cache Disable
-        "msr sctlr_el2, x5",
-        "isb",
-        "dsb sy",
-
-        // Invalidate D-cache by set/way to the point of coherency
-        "mrs x5, clidr_el1",      // x5 = CLIDR
-        "and x6, x5, #0x7000000", // x6 = LoC
-        "lsr x6, x6, #23",
-        "cbz x6, 2f",             // if LoC is 0, then no need to clean
-        "mov x10, #0",            // x10 = cache level * 2
-
-        // loop over cache levels
-        "1:",
-            "add x12, x10, x10, lsr #1", // x12 = level * 3
-            "lsr x11, x5, x12",
-            "and x11, x11, #7",          // x11 = cache type
-            "cmp x11, #2",               // is it a data or unified cache?
-            "b.lt 3f",                   // if not, skip to next level
-            "msr csselr_el1, x10",       // select cache level
-            "isb",                       // sync change of csselr
-            "mrs x11, ccsidr_el1",       // x11 = ccsidr
-            "and x12, x11, #7",          // x12 = log2(line size) - 4
-            "add x12, x12, #4",          // x12 = log2(line size)
-            "and x13, x11, #0x3ff",      // x13 = (number of ways - 1)
-            "and x14, x11, #0x7fff000",  // x14 = (number of sets - 1)
-            "lsr x14, x14, #13",
-            "clz w15, w13",              // w15 = 31 - log2(ways)
-            // loop over ways
-            "4:",
-                "mov x9, x14",           // x9 = set number
-                // loop over sets
-                "5:",
-                    "lsl x7, x13, x15",
-                    "lsl x8, x9, x12",
-                    "orr x11, x10, x7",  // x11 = (level << 1) | (way << ...)
-                    "orr x11, x11, x8",  // x11 |= (set << log2(line size))
-                    "dc isw, x11",       // invalidate by set/way
-                    "subs x9, x9, #1",
-                    "b.ge 5b",
-                    "subs x13, x13, #1",
-                    "b.ge 4b",
-            "3:",
-                "add x10, x10, #2",      // next cache level
-                "cmp x6, x10",
-                "b.gt 1b",
-    "2:",
-        "dsb sy",
-        "isb",
-
-        // Invalidate I-cache
-        "ic iallu",
-        "tlbi alle2is",
-
-        // Final synchronization
-        "dsb ish",
-        "isb",
-
-        // Jump to payload
         "b {next_image}",
-        next_image = sym crate::NEXT_IMAGE,
-    )
+        next_image = sym NEXT_IMAGE,
+    );
+}
+
+/// Run the payload at EL2.
+///
+/// # Safety
+///
+/// `NEXT_IMAGE` must point to a valid executable piece of code which never returns.
+unsafe fn run_payload_el2(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
+    disable_mmu_and_caches();
+    // SAFETY: This is a call to the hypervisor, which is safe.
+    unsafe {
+        jump_to_payload(x0, x1, x2, x3);
+    }
 }

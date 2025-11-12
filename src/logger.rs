@@ -19,7 +19,7 @@ impl<T: Send + Write> Log for SharedConsole<T> {
     fn log(&self, record: &Record) {
         exception_free(|token| {
             let console = &mut *self.console.borrow(token).lock();
-            writeln!(console, "[{}] {}", record.level(), record.args()).unwrap();
+            writeln!(console, "[{}] {}", record.level(), record.args()).expect("writeln failed");
         });
     }
 

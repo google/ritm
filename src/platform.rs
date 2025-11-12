@@ -8,14 +8,15 @@
 
 #[cfg(platform = "pixel")]
 mod pixel;
-#[cfg(platform = "qemu")]
+// #[cfg(platform = "qemu")]
 mod qemu;
 
 use embedded_io::{Read, ReadReady, Write, WriteReady};
 #[cfg(platform = "pixel")]
 pub use pixel::Pixel as PlatformImpl;
-#[cfg(platform = "qemu")]
+// #[cfg(platform = "qemu")]
 pub use qemu::Qemu as PlatformImpl;
+use ritm_device_tree::fdt::Fdt;
 
 pub type ConsoleImpl = <PlatformImpl as Platform>::Console;
 
@@ -36,6 +37,12 @@ pub trait Platform {
     /// This should return `Some` the first time it is called, but may return `None` on subsequent
     /// calls.
     fn parts(&mut self) -> Option<PlatformParts<Self::Console>>;
+
+    /// Modify the Device Tree if needed to adjust for the platform's needs. That might include
+    /// reserving memory for RITM, or changing the PSCI method.
+    fn modify_dt(&self, fdt: Fdt<'static>) -> Fdt<'static> {
+        fdt
+    }
 }
 
 /// The drivers provided by each platform.

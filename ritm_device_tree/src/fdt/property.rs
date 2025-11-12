@@ -138,7 +138,7 @@ impl<'a> FdtProperty<'a> {
             .value
             .iter()
             .all(|&ch| ch.is_ascii_graphic() || ch == b' ' || ch == 0);
-        let has_empty = self.value.windows(2).all(|window| window == [0, 0]);
+        let has_empty = self.value.windows(2).any(|window| window == [0, 0]);
         if is_printable && self.value.ends_with(&[0]) && !has_empty {
             let mut strings = self.as_str_list();
             if let Some(first) = strings.next() {
@@ -151,13 +151,17 @@ impl<'a> FdtProperty<'a> {
             }
         }
 
-        if self.value.len() % 4 == 0 {
+        if self.value.len().is_multiple_of(4) {
             write!(f, " = <")?;
             for (i, chunk) in self.value.chunks_exact(4).enumerate() {
                 if i > 0 {
                     write!(f, " ")?;
                 }
-                let val = u32::from_be_bytes(chunk.try_into().unwrap());
+                let val = u32::from_be_bytes(
+                    chunk
+                        .try_into()
+                        .expect("u32::from_be_bytes() should always succeed with 4 bytes"),
+                );
                 write!(f, "0x{val:02x}")?;
             }
             writeln!(f, ">;")?;
