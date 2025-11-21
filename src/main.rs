@@ -11,6 +11,7 @@
 
 extern crate alloc;
 
+mod arch;
 mod console;
 mod exceptions;
 mod logger;
@@ -20,11 +21,15 @@ mod platform;
 use aarch64_paging::paging::PAGE_SIZE;
 use aarch64_rt::entry;
 use buddy_system_allocator::{Heap, LockedHeap};
+use core::arch::naked_asm;
 use core::ops::DerefMut;
 use log::{LevelFilter, info};
 use spin::mutex::{SpinMutex, SpinMutexGuard};
 
-use crate::platform::{Platform, PlatformImpl};
+use crate::{
+    arch::disable_mmu_and_caches,
+    platform::{Platform, PlatformImpl},
+};
 
 const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
@@ -33,6 +38,13 @@ static HEAP: SpinMutex<[u8; HEAP_SIZE]> = SpinMutex::new([0; HEAP_SIZE]);
 
 #[global_allocator]
 static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
+
+#[repr(align(0x200000))] // Linux requires 2MB alignment
+struct AlignImage<T>(T);
+
+static NEXT_IMAGE: AlignImage<[u8; 18_815_488]> = AlignImage(*include_bytes!(
+    "/usr/local/google/home/mmac/code/linux/arch/arm64/boot/Image"
+));
 
 entry!(main);
 fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
@@ -52,7 +64,10 @@ fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
         SpinMutexGuard::leak(HEAP.try_lock().expect("failed to lock heap")).as_mut_slice(),
     );
 
-    todo!();
+    // SAFETY: We assume that the payload at `NEXT_IMAGE` is a valid executable piece of code.
+    unsafe {
+        run_payload_el2(x0, x1, x2, x3);
+    }
 }
 
 /// Adds the given memory range to the given heap.
@@ -62,4 +77,30 @@ fn add_to_heap<const ORDER: usize>(heap: &mut Heap<ORDER>, range: &'static mut [
     unsafe {
         heap.init(range.as_mut_ptr() as usize, range.len());
     }
+}
+
+/// Run the payload at EL2.
+///
+/// # Safety
+///
+/// `NEXT_IMAGE` must point to a valid executable piece of code which never returns.
+unsafe fn run_payload_el2(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
+    disable_mmu_and_caches();
+    // SAFETY: The caller guarantees that `NEXT_IMAGE` points to a valid executable piece of code which never returns.
+    unsafe {
+        jump_to_payload(x0, x1, x2, x3);
+    }
+}
+
+/// Jumps to the payload.
+///
+/// # Safety
+///
+/// `NEXT_IMAGE` must point to a valid executable piece of code which never returns.
+#[unsafe(naked)]
+unsafe extern "C" fn jump_to_payload(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
+    naked_asm!(
+        "b {next_image}",
+        next_image = sym NEXT_IMAGE,
+    );
 }
