@@ -11,58 +11,59 @@
 #![deny(clippy::undocumented_unsafe_blocks)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+extern crate alloc;
+
+mod console;
 mod exceptions;
+mod logger;
+mod pagetable;
+mod platform;
 
-use aarch64_paging::paging::Attributes;
-use aarch64_rt::{InitialPagetable, entry, initial_pagetable};
-use arm_pl011_uart::{PL011Registers, Uart, UniqueMmioPointer};
-use core::fmt::Write;
-use core::panic::PanicInfo;
-use core::ptr::NonNull;
-use smccc::Smc;
-use smccc::psci::system_off;
+use aarch64_paging::paging::PAGE_SIZE;
+use aarch64_rt::entry;
+use buddy_system_allocator::{Heap, LockedHeap};
+use core::ops::DerefMut;
+use log::{LevelFilter, info};
+use spin::mutex::{SpinMutex, SpinMutexGuard};
 
-/// Base address of the primary PL011 UART.
-const PL011_BASE_ADDRESS: NonNull<PL011Registers> = NonNull::new(0x900_0000 as _).unwrap();
+use crate::platform::{Platform, PlatformImpl};
 
-/// Attributes to use for device memory in the initial identity map.
-const DEVICE_ATTRIBUTES: Attributes = Attributes::VALID
-    .union(Attributes::ATTRIBUTE_INDEX_0)
-    .union(Attributes::ACCESSED)
-    .union(Attributes::UXN);
+const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
-/// Attributes to use for normal memory in the initial identity map.
-const MEMORY_ATTRIBUTES: Attributes = Attributes::VALID
-    .union(Attributes::ATTRIBUTE_INDEX_1)
-    .union(Attributes::INNER_SHAREABLE)
-    .union(Attributes::ACCESSED)
-    .union(Attributes::NON_GLOBAL);
+const HEAP_SIZE: usize = 40 * PAGE_SIZE;
+#[unsafe(no_mangle)]
+#[unsafe(link_section = ".heap")]
+static HEAP: SpinMutex<[u8; HEAP_SIZE]> = SpinMutex::new([0; HEAP_SIZE]);
 
-initial_pagetable!({
-    let mut idmap = [0; 512];
-    // 1 GiB of device memory.
-    idmap[0] = DEVICE_ATTRIBUTES.bits();
-    // 1 GiB of normal memory.
-    idmap[1] = MEMORY_ATTRIBUTES.bits() | 0x40000000;
-    // Another 1 GiB of device memory starting at 256 GiB.
-    idmap[256] = DEVICE_ATTRIBUTES.bits() | 0x4000000000;
-    InitialPagetable(idmap)
-});
+#[global_allocator]
+static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
 
 entry!(main);
 fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
-    // SAFETY: `PL011_BASE_ADDRESS` is the base address of a PL011 device, and
-    // nothing else accesses that address range.
-    let mut uart = unsafe { Uart::new(UniqueMmioPointer::new(PL011_BASE_ADDRESS)) };
+    // SAFETY: We only call `PlatformImpl::create` here, once on boot.
+    let mut platform = unsafe { PlatformImpl::create() };
+    let parts = platform.parts().expect("could not get platform parts");
 
-    writeln!(uart, "main({x0:#x}, {x1:#x}, {x2:#x}, {x3:#x})").unwrap();
+    let console = console::init(parts.console);
+    logger::init(console.shared(), LOG_LEVEL).expect("failed to init logger");
 
-    system_off::<Smc>().unwrap();
-    panic!("system_off returned");
+    info!("starting ritm");
+    info!("main({x0:#x}, {x1:#x}, {x2:#x}, {x3:#x})");
+
+    // Give the allocator some memory to allocate.
+    add_to_heap(
+        HEAP_ALLOCATOR.lock().deref_mut(),
+        SpinMutexGuard::leak(HEAP.try_lock().expect("failed to lock heap")).as_mut_slice(),
+    );
+
+    todo!();
 }
 
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    system_off::<Smc>().unwrap();
-    loop {}
+/// Adds the given memory range to the given heap.
+fn add_to_heap<const ORDER: usize>(heap: &mut Heap<ORDER>, range: &'static mut [u8]) {
+    // SAFETY: The range we pass is valid because it comes from a mutable static reference, which it
+    // effectively takes ownership of.
+    unsafe {
+        heap.init(range.as_mut_ptr() as usize, range.len());
+    }
 }

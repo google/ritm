@@ -1,0 +1,34 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+use crate::console::SharedConsole;
+use embedded_io::Write;
+use log::{LevelFilter, Log, Metadata, Record, SetLoggerError};
+use percore::exception_free;
+
+impl<T: Send + Write> Log for SharedConsole<T> {
+    fn enabled(&self, _metadata: &Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &Record) {
+        exception_free(|token| {
+            let console = &mut *self.console.borrow(token).lock();
+            writeln!(console, "[{}] {}", record.level(), record.args()).expect("writeln failed");
+        });
+    }
+
+    fn flush(&self) {}
+}
+
+/// Initialises the logger with the given shared console.
+pub fn init(console: &'static impl Log, max_level: LevelFilter) -> Result<(), SetLoggerError> {
+    log::set_logger(console)?;
+    log::set_max_level(max_level);
+    Ok(())
+}
