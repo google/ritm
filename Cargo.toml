@@ -11,16 +11,21 @@ categories = ["embedded", "no-std"]
 
 [dependencies]
 aarch64-paging = { version = "0.11", default-features = false }
-aarch64-rt = { version = "0.3", features = ["el2", "exceptions", "initial-pagetable", "psci"], default-features = false }
+aarch64-rt = { version = "0.4", features = ["el2", "exceptions", "initial-pagetable", "psci"], default-features = false }
 arm-pl011-uart = "0.4"
+arm-psci = "0.2"
 arm-sysregs = { version = "0.2", features = ["el1", "el2"] }
 buddy_system_allocator = { version = "0.12", default-features = false, features = ["alloc", "use_spin"] }
+dtoolkit = { version = "0.1", features = ["write"] }
 embedded-io = "0.7"
 log = "0.4"
 percore = "0.2"
 safe-mmio = "0.2"
 smccc = "0.2"
 spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-features = false }
+
+[patch.crates-io]
+aarch64-rt = { git = "https://github.com/m4tx/aarch64-rt.git", rev = "b5783edd5e5d5555105946c462646572d3454d99" }
 
 [lints.rust]
 deprecated-safe = "warn"

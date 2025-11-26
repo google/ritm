@@ -6,42 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[unsafe(no_mangle)]
-extern "C" fn sync_exception_current(_elr: u64, _spsr: u64) {
-    panic!("Unexpected sync_exception_current");
-}
+use aarch64_rt::{ExceptionHandlers, RegisterStateRef};
 
-#[unsafe(no_mangle)]
-extern "C" fn irq_current(_elr: u64, _spsr: u64) {
-    panic!("Unexpected irq_current");
-}
-
-#[unsafe(no_mangle)]
-extern "C" fn fiq_current(_elr: u64, _spsr: u64) {
-    panic!("Unexpected fiq_current");
-}
-
-#[unsafe(no_mangle)]
-extern "C" fn serr_current(_elr: u64, _spsr: u64) {
-    panic!("Unexpected serr_current");
-}
-
-#[unsafe(no_mangle)]
-extern "C" fn sync_lower(_elr: u64, _spsr: u64) {
-    panic!("Unexpected sync_lower");
-}
-
-#[unsafe(no_mangle)]
-extern "C" fn irq_lower(_elr: u64, _spsr: u64) {
-    panic!("Unexpected irq_lower");
-}
-
-#[unsafe(no_mangle)]
-extern "C" fn fiq_lower(_elr: u64, _spsr: u64) {
-    panic!("Unexpected fiq_lower");
-}
-
-#[unsafe(no_mangle)]
-extern "C" fn serr_lower(_elr: u64, _spsr: u64) {
-    panic!("Unexpected serr_lower");
+pub struct Exceptions;
+impl ExceptionHandlers for Exceptions {
+    extern "C" fn sync_lower(register_state: RegisterStateRef) {
+        // sync_lower exception is most likely a HVC/SMC call, which we should
+        // handle in the hypervisor.
+        crate::hypervisor::handle_sync_lower(register_state);
+    }
 }
