@@ -34,6 +34,48 @@ pub fn isb() {
     }
 }
 
+/// Invalidate all instruction caches.
+pub fn ic_iallu() {
+    // SAFETY: `ic iallu` is always safe.
+    unsafe {
+        asm!("ic iallu", options(nostack, preserves_flags));
+    }
+}
+
+/// Invalidate all TLB entries for EL2.
+pub fn tlbi_alle2is() {
+    // SAFETY: `tlbi alle2is` is always safe.
+    unsafe {
+        asm!("tlbi alle2is", options(nostack, preserves_flags));
+    }
+}
+
+/// Get the current stack pointer.
+pub fn sp() -> u64 {
+    let val: u64;
+    // SAFETY: Reading from the sp register is always safe.
+    unsafe { asm!("mov {}, sp", out(reg) val, options(nostack)) };
+    val
+}
+
+pub fn esr() -> u64 {
+    let mut esr: u64;
+    // SAFETY: Reading esr is always safe.
+    unsafe {
+        asm!("mrs {esr}, esr_el2", esr = out(reg) esr);
+    }
+    esr
+}
+
+pub fn far() -> u64 {
+    let mut far: u64;
+    // SAFETY: Reading far is always safe.
+    unsafe {
+        asm!("mrs {far}, far_el2", far = out(reg) far);
+    }
+    far
+}
+
 macro_rules! sys_reg {
     ($name:ident, {$($const_name:ident: $const_val:expr),*}) => {
         pub mod $name {
@@ -85,10 +127,20 @@ sys_reg!(sctlr_el2, {
 sys_reg!(clidr_el1);
 sys_reg!(csselr_el1);
 sys_reg!(ccsidr_el1);
-sys_reg!(hcr_el2);
+sys_reg!(hcr_el2, {
+    RW: 1 << 31,
+    TID1: 1 << 19,
+    AMO: 1 << 4
+});
 sys_reg!(cntvoff_el2);
-sys_reg!(cnthctl_el2);
-sys_reg!(spsr_el2);
+sys_reg!(cnthctl_el2, {
+    ENABLE: 1 << 0,
+    IMASK: 1 << 1
+});
+sys_reg!(spsr_el2, {
+    MASK_ALL: 0b1111 << 6,
+    EL1H: 5
+});
 sys_reg!(elr_el2);
 sys_reg!(sp_el1);
 

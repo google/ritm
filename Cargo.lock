@@ -15,8 +15,7 @@ dependencies = [
 [[package]]
 name = "aarch64-rt"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a21dc662bf8045ff4a57989d927607b71654b902f0a1976ec3e7fbb30a1477aa"
+source = "git+https://github.com/m4tx/aarch64-rt.git?rev=a93fdb00baa88549c7e9c90a4dd1c66b164844bf#a93fdb00baa88549c7e9c90a4dd1c66b164844bf"
 dependencies = [
  "smccc",
 ]
@@ -51,6 +50,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dtoolkit"
+version = "0.1.0"
+source = "git+ssh://git@github.com/google/dtoolkit.git?rev=35c8644de5fd2ff0098cfd8e493a8cffc163cf04#35c8644de5fd2ff0098cfd8e493a8cffc163cf04"
+dependencies = [
+ "indexmap",
+ "twox-hash",
+ "zerocopy",
+]
+
+[[package]]
 name = "embedded-hal"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -71,6 +80,28 @@ name = "embedded-io"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9eb1aa714776b75c7e67e1da744b81a129b3ff919c8712b5e1b32252c1f07cc7"
+
+[[package]]
+name = "equivalent"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "hashbrown"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
+
+[[package]]
+name = "indexmap"
+version = "2.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ad4bb2b565bca0645f4d68c5c9af97fba094e9791da685bf83cb5f3ce74acf2"
+dependencies = [
+ "equivalent",
+ "hashbrown",
+]
 
 [[package]]
 name = "lock_api"
@@ -128,6 +159,7 @@ dependencies = [
  "aarch64-rt",
  "arm-pl011-uart",
  "buddy_system_allocator",
+ "dtoolkit",
  "embedded-io",
  "log",
  "percore",
@@ -205,6 +237,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "twox-hash"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
 
 [[package]]
 name = "unicode-ident"

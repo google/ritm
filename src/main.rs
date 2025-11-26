@@ -14,6 +14,7 @@ extern crate alloc;
 mod arch;
 mod console;
 mod exceptions;
+mod hypervisor;
 mod logger;
 mod pagetable;
 mod platform;
@@ -27,17 +28,20 @@ use aarch64_rt::entry;
 use buddy_system_allocator::{Heap, LockedHeap};
 use core::arch::naked_asm;
 use core::ops::DerefMut;
+use dtoolkit::fdt::Fdt;
 use log::{LevelFilter, info};
 use spin::mutex::{SpinMutex, SpinMutexGuard};
 
 use crate::{
     arch::disable_mmu_and_caches,
-    platform::{Platform, PlatformImpl},
+    platform::{BootMode, Platform, PlatformImpl},
 };
 
 const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
 const HEAP_SIZE: usize = 40 * PAGE_SIZE;
+#[unsafe(no_mangle)]
+#[unsafe(link_section = ".heap")]
 static HEAP: SpinMutex<[u8; HEAP_SIZE]> = SpinMutex::new([0; HEAP_SIZE]);
 
 #[global_allocator]
@@ -67,9 +71,25 @@ fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
         SpinMutexGuard::leak(HEAP.try_lock().expect("failed to lock heap")).as_mut_slice(),
     );
 
-    // SAFETY: We assume that the payload at `NEXT_IMAGE` is a valid executable piece of code.
+    let fdt_address = x0 as *const u8;
+    // SAFETY: We trust that the FDT pointer we were given is valid, and this is the only time we
+    // use it.
+    // SAFETY: fdt_address is a valid pointer to a device tree.
+    let fdt: Fdt<'_> =
+        unsafe { Fdt::from_raw(fdt_address).expect("fdt_address is not a valid fdt") };
+
+    let new_fdt = platform.modify_dt(fdt);
+    let dtb_ptr = new_fdt.data().as_ptr() as u64;
+
+    let boot_mode = platform.boot_mode();
+    info!("Booting in {boot_mode:?}");
+
+    // SAFETY: We assume there's a valid executable at `NEXT_IMAGE`.
     unsafe {
-        run_payload_el2(x0, x1, x2, x3);
+        match platform.boot_mode() {
+            BootMode::El1 => run_payload_el1(dtb_ptr, x1, x2, x3),
+            BootMode::El2 => run_payload_el2(dtb_ptr, x1, x2, x3),
+        }
     }
 }
 
@@ -103,4 +123,16 @@ unsafe extern "C" fn run_payload_el2(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
         disable_mmu_and_caches = sym disable_mmu_and_caches,
         next_image = sym NEXT_IMAGE,
     );
+}
+
+/// Run the payload at EL1.
+///
+/// # Safety
+///
+/// `NEXT_IMAGE` must point to a valid executable piece of code which never returns.
+unsafe fn run_payload_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
+    // SAFETY: The caller guarantees that `NEXT_IMAGE` points to a valid executable piece of code which never returns.
+    unsafe {
+        hypervisor::entry_point_el1(x0, x1, x2, x3, &raw const NEXT_IMAGE.0 as u64);
+    }
 }
