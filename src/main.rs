@@ -43,7 +43,7 @@ fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     let parts = platform.parts().expect("could not get platform parts");
 
     let console = console::init(parts.console);
-    logger::init(console.shared(), LOG_LEVEL).expect("failed to init logger");
+    logger::init(console, LOG_LEVEL).expect("failed to init logger");
 
     info!("starting ritm");
     info!("main({x0:#x}, {x1:#x}, {x2:#x}, {x3:#x})");

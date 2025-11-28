@@ -9,7 +9,7 @@
 #[cfg(platform = "qemu")]
 mod qemu;
 
-use embedded_io::{Read, ReadReady, Write, WriteReady};
+use embedded_io::{Write, WriteReady};
 #[cfg(platform = "qemu")]
 pub use qemu::Qemu as PlatformImpl;
 
@@ -17,7 +17,7 @@ pub type ConsoleImpl = <PlatformImpl as Platform>::Console;
 
 /// Platform-specific code.
 pub trait Platform {
-    type Console: Read + ReadReady + Send + Write + WriteReady;
+    type Console: Send + Write + WriteReady;
 
     /// Creates an instance of the platform.
     ///

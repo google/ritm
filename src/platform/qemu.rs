@@ -15,6 +15,7 @@ use core::ptr::NonNull;
 
 /// Base address of the first PL011 UART.
 const UART_BASE_ADDRESS: *mut PL011Registers = 0x900_0000 as _;
+
 pub struct Qemu {
     parts: Option<PlatformParts<Uart<'static>>>,
 }

@@ -6,12 +6,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::console::SharedConsole;
+use crate::console::Console;
 use embedded_io::Write;
 use log::{LevelFilter, Log, Metadata, Record, SetLoggerError};
 use percore::exception_free;
 
-impl<T: Send + Write> Log for SharedConsole<T> {
+impl<T: Send + Write> Log for Console<T> {
     fn enabled(&self, _metadata: &Metadata) -> bool {
         true
     }
@@ -26,7 +26,7 @@ impl<T: Send + Write> Log for SharedConsole<T> {
     fn flush(&self) {}
 }
 
-/// Initialises the logger with the given shared console.
+/// Initialises the logger with the given console.
 pub fn init(console: &'static impl Log, max_level: LevelFilter) -> Result<(), SetLoggerError> {
     log::set_logger(console)?;
     log::set_max_level(max_level);

@@ -13,20 +13,18 @@ use percore::{ExceptionLock, exception_free};
 use smccc::{Smc, psci::system_off};
 use spin::{Once, mutex::SpinMutex};
 
-static CONSOLE: Once<SharedConsole<ConsoleImpl>> = Once::new();
+static CONSOLE: Once<Console<ConsoleImpl>> = Once::new();
 
 /// A console guarded by a spin mutex so that it may be shared between threads.
-///
-/// Any thread may write to it, but only a single thread may read from it.
-pub struct SharedConsole<T: Send> {
+pub struct Console<T: Send> {
     pub console: ExceptionLock<SpinMutex<T>>,
 }
 
-impl<T: ErrorType + Send> ErrorType for &SharedConsole<T> {
+impl<T: ErrorType + Send> ErrorType for &Console<T> {
     type Error = T::Error;
 }
 
-impl<T: ErrorType + Send + Write> Write for &SharedConsole<T> {
+impl<T: ErrorType + Send + Write> Write for &Console<T> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         exception_free(|token| self.console.borrow(token).lock().write(buf))
     }
@@ -36,41 +34,15 @@ impl<T: ErrorType + Send + Write> Write for &SharedConsole<T> {
     }
 }
 
-/// The owner of a shared console, who has unique read access.
-///
-/// The reading side can't be shared, as the caller of `ReadReady::read_ready` needs to be
-/// guaranteed that bytes will be available to read when the next call `Read::read`.
-pub struct Console<T: Send + 'static> {
-    shared: &'static SharedConsole<T>,
-}
-
-impl<T: Send + 'static> Console<T> {
-    /// Returns a shared writer for the console. This may be copied freely.
-    pub fn shared(&self) -> &'static SharedConsole<T> {
-        self.shared
-    }
-}
-
-impl<T: ErrorType + Send + Write> Write for Console<T> {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        self.shared.write(buf)
-    }
-
-    fn flush(&mut self) -> Result<(), Self::Error> {
-        self.shared.flush()
-    }
-}
-
 impl<T: ErrorType + Send + 'static> ErrorType for Console<T> {
     type Error = T::Error;
 }
 
 /// Initialises the shared console.
-pub fn init(console: ConsoleImpl) -> Console<ConsoleImpl> {
-    let shared = CONSOLE.call_once(|| SharedConsole {
+pub fn init(console: ConsoleImpl) -> &'static Console<ConsoleImpl> {
+    CONSOLE.call_once(|| Console {
         console: ExceptionLock::new(SpinMutex::new(console)),
-    });
-    Console { shared }
+    })
 }
 
 #[panic_handler]
