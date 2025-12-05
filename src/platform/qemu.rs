@@ -45,6 +45,8 @@ impl Qemu {
 impl Platform for Qemu {
     type Console = Uart<'static>;
 
+    const MAX_CORES: usize = 8;
+
     unsafe fn create() -> Self {
         let mut uart = Uart::new(
             // SAFETY: UART_BASE_ADDRESS is valid and mapped, and `create` is only called once so
@@ -76,6 +78,9 @@ impl Platform for Qemu {
     fn modify_dt(&self, fdt: Fdt<'static>) -> Fdt<'static> {
         let mut dt = DeviceTree::from_fdt(&fdt).expect("expected FDT to be valid");
 
+        // Modify the Device Tree to reserve the memory used by RITM, so that the operating system
+        // will not try to use it.
+        // See `linker/qemu.ld` for the address reference.
         let mut res = Vec::<u8>::new();
         res.extend_from_slice(&0x4080_0000u64.to_be_bytes());
         res.extend_from_slice(&(120u64 * 1024 * 1024).to_be_bytes()); // 128 MB default - 8 MB reserved

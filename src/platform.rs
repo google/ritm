@@ -20,6 +20,9 @@ pub type ConsoleImpl = <PlatformImpl as Platform>::Console;
 pub trait Platform {
     type Console: Send + Write + WriteReady;
 
+    /// The maximum number of cores supported by the platform.
+    const MAX_CORES: usize;
+
     /// Creates an instance of the platform.
     ///
     /// # Safety

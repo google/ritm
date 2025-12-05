@@ -143,6 +143,7 @@ sys_reg!(spsr_el2, {
 });
 sys_reg!(elr_el2);
 sys_reg!(sp_el1);
+sys_reg!(mpidr_el1);
 
 /// Disables MMU and caches.
 ///

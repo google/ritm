@@ -18,13 +18,14 @@ mod hypervisor;
 mod logger;
 mod pagetable;
 mod platform;
+mod simple_map;
 
 mod payload_constants {
     include!(concat!(env!("OUT_DIR"), "/payload_constants.rs"));
 }
 
 use aarch64_paging::paging::PAGE_SIZE;
-use aarch64_rt::entry;
+use aarch64_rt::{entry, exception_handlers};
 use buddy_system_allocator::{Heap, LockedHeap};
 use core::arch::naked_asm;
 use core::ops::DerefMut;
@@ -34,13 +35,13 @@ use spin::mutex::{SpinMutex, SpinMutexGuard};
 
 use crate::{
     arch::disable_mmu_and_caches,
+    exceptions::Exceptions,
     platform::{BootMode, Platform, PlatformImpl},
 };
 
 const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
 const HEAP_SIZE: usize = 40 * PAGE_SIZE;
-#[unsafe(no_mangle)]
 #[unsafe(link_section = ".heap")]
 static HEAP: SpinMutex<[u8; HEAP_SIZE]> = SpinMutex::new([0; HEAP_SIZE]);
 
@@ -53,7 +54,9 @@ struct AlignImage<T>(T);
 static NEXT_IMAGE: AlignImage<[u8; payload_constants::PAYLOAD_SIZE]> =
     AlignImage(*payload_constants::PAYLOAD_DATA);
 
+exception_handlers!(Exceptions);
 entry!(main);
+
 fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     // SAFETY: We only call `PlatformImpl::create` here, once on boot.
     let mut platform = unsafe { PlatformImpl::create() };

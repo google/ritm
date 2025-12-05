@@ -14,8 +14,9 @@ dependencies = [
 
 [[package]]
 name = "aarch64-rt"
-version = "0.3.1"
-source = "git+https://github.com/m4tx/aarch64-rt.git?rev=a93fdb00baa88549c7e9c90a4dd1c66b164844bf#a93fdb00baa88549c7e9c90a4dd1c66b164844bf"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b64de198c6b65a80f7b8e799c2c9b957de30ef161d676bbc4b52943313bc4f27"
 dependencies = [
  "smccc",
 ]
@@ -32,6 +33,17 @@ dependencies = [
  "safe-mmio",
  "thiserror",
  "zerocopy",
+]
+
+[[package]]
+name = "arm-psci"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb260c93c22f6aa06dd87a2cee5dfe79554c6ae228ec8fd256b31293e3d188ff"
+dependencies = [
+ "bitflags",
+ "num_enum",
+ "thiserror",
 ]
 
 [[package]]
@@ -125,6 +137,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 
 [[package]]
+name = "num_enum"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1207a7e20ad57b847bbddc6776b968420d38292bbfe2089accff5e19e82454c"
+dependencies = [
+ "num_enum_derive",
+ "rustversion",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff32365de1b6743cb203b710788263c44a03de03802daf96092f2da4fe6ba4d7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "percore"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -158,6 +191,7 @@ dependencies = [
  "aarch64-paging",
  "aarch64-rt",
  "arm-pl011-uart",
+ "arm-psci",
  "buddy_system_allocator",
  "dtoolkit",
  "embedded-io",
@@ -167,6 +201,12 @@ dependencies = [
  "smccc",
  "spin 0.10.0",
 ]
+
+[[package]]
+name = "rustversion"
+version = "1.0.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "safe-mmio"
