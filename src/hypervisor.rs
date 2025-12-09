@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use core::arch::naked_asm;
+use core::{arch::naked_asm, mem::offset_of};
 
 use aarch64_rt::{RegisterStateRef, Stack};
 use alloc::boxed::Box;
@@ -280,7 +280,8 @@ struct SuspendContext {
 ///
 /// # Safety
 ///
-/// This function is unsafe because it performs a context switch to EL1.
+/// The caller must ensure the entry pointer and `context_id` for given mpidr saved in
+/// [`SUSPEND_CONTEXTS`] is valid.
 unsafe extern "C" fn restore_from_suspend(mpidr: u64) -> ! {
     let context = SUSPEND_CONTEXTS
         .lock()
@@ -291,7 +292,8 @@ unsafe extern "C" fn restore_from_suspend(mpidr: u64) -> ! {
         context.entry_point, context.context_id
     );
 
-    // SAFETY: We are restoring the execution of the guest.
+    // SAFETY: We are restoring the execution of the guest, assuming the entry point and
+    // context_id we saved earlier from the guest is valid.
     unsafe {
         entry_point_el1(context.context_id, 0, 0, 0, context.entry_point);
     }
@@ -301,16 +303,19 @@ unsafe extern "C" fn restore_from_suspend(mpidr: u64) -> ! {
 ///
 /// # Safety
 ///
-/// This function is unsafe because it is a naked function that modifies the stack pointer.
+/// The caller must ensure that the context pointer passed to this function is valid
+/// to read, and that the entry pointer and `context_id` for given mpidr saved in
+/// [`SUSPEND_CONTEXTS`] are valid.
 #[unsafe(naked)]
-unsafe extern "C" fn cpu_resume() -> ! {
+unsafe extern "C" fn cpu_resume(context: *mut SuspendContext) -> ! {
     naked_asm!(
         // x0 contains the context pointer passed to CPU_SUSPEND
-        "ldr x1, [x0, #0]",  // Load mpidr (offset 0) into x1
-        "ldr x2, [x0, #24]", // Load stack_pointer (offset 24) into x2
-        "mov sp, x2",        // Restore SP
-        "mov x0, x1",        // Move mpidr to x0
+        "ldr x0, [x0, #{mpidr_offset}]", // Load mpidr (offset 0) into x0
+        "ldr x1, [x0, #{stack_offset}]", // Load stack_pointer (offset 24) into x1
+        "mov sp, x1",
         "b {restore_from_suspend}",
+        mpidr_offset = const offset_of!(SuspendContext, mpidr),
+        stack_offset = const offset_of!(SuspendContext, stack_pointer),
         restore_from_suspend = sym restore_from_suspend,
     );
 }
