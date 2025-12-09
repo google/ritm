@@ -73,12 +73,6 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
         arch::elr_el2::write(entry_point);
     }
 
-    // Set stack pointer for EL1
-    // SAFETY: We only affect EL1.
-    unsafe {
-        arch::sp_el1::write(arch::sp());
-    }
-
     // SAFETY: The caller ensures that the provided arguments are valid and that this is called
     // from EL2. We've set the `elr_el2` system register right before calling this, and the caller
     // ensured that the value we've set is a valid address for EL1 execution that never returns.
@@ -181,10 +175,6 @@ unsafe fn handle_psci(fn_id: u64, arg0: u64, arg1: u64, arg2: u64) -> Result<u64
 
     let psci_fn = arm_psci::Function::try_from(&[fn_id, arg0, arg1, arg2])?;
     match psci_fn {
-        CpuSuspend { state, entry } => {
-            let result = psci_cpu_suspend(state, entry);
-            Ok(result)
-        }
         Version
         | CpuOff
         | AffinityInfo { .. }
@@ -205,6 +195,7 @@ unsafe fn handle_psci(fn_id: u64, arg0: u64, arg1: u64, arg2: u64) -> Result<u64
         | SetSuspendMode { .. }
         | StatResidency { .. }
         | StatCount { .. } => {
+            // forward the PSCI call
             let mut smc_args = [0; 17];
             smc_args[0] = arg0;
             smc_args[1] = arg1;
@@ -219,6 +210,10 @@ unsafe fn handle_psci(fn_id: u64, arg0: u64, arg1: u64, arg2: u64) -> Result<u64
         CpuOn { target_cpu, entry } => {
             let result = psci_cpu_on(fn_id, target_cpu, entry);
             Ok(u64::from(i32::from(result).cast_unsigned()))
+        }
+        CpuSuspend { state, entry } => {
+            let result = psci_cpu_suspend(state, entry);
+            Ok(result)
         }
     }
 }

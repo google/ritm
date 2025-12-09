@@ -41,7 +41,6 @@ use crate::{
 const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
 const HEAP_SIZE: usize = 40 * PAGE_SIZE;
-#[unsafe(link_section = ".heap")]
 static HEAP: SpinMutex<[u8; HEAP_SIZE]> = SpinMutex::new([0; HEAP_SIZE]);
 
 #[global_allocator]

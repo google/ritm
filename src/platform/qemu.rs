@@ -82,14 +82,14 @@ impl Platform for Qemu {
         // will not try to use it.
         // See `linker/qemu.ld` for the address reference.
         let mut res = Vec::<u8>::new();
-        res.extend_from_slice(&0x4080_0000u64.to_be_bytes());
-        res.extend_from_slice(&(120u64 * 1024 * 1024).to_be_bytes()); // 128 MB default - 8 MB reserved
+        res.extend_from_slice(&0x4040_0000u64.to_be_bytes());
+        res.extend_from_slice(&(124u64 * 1024 * 1024).to_be_bytes()); // 128 MiB default - 4 MiB reserved
 
         dt.root_mut()
             .remove_child("memory@40000000")
             .expect("memory node not found");
         dt.root_mut().add_child(
-            DeviceTreeNode::builder("memory@40800000")
+            DeviceTreeNode::builder("memory@40400000")
                 .property(DeviceTreeProperty::new("reg", res))
                 .property(DeviceTreeProperty::new("device_type", b"memory\0"))
                 .build(),
