@@ -34,24 +34,6 @@ pub fn isb() {
     }
 }
 
-/// Invalidate all instruction caches.
-#[allow(dead_code)]
-pub fn ic_iallu() {
-    // SAFETY: `ic iallu` is always safe.
-    unsafe {
-        asm!("ic iallu", options(nostack, preserves_flags));
-    }
-}
-
-/// Invalidate all TLB entries for EL2.
-#[allow(dead_code)]
-pub fn tlbi_alle2is() {
-    // SAFETY: `tlbi alle2is` is always safe.
-    unsafe {
-        asm!("tlbi alle2is", options(nostack, preserves_flags));
-    }
-}
-
 /// Get the current stack pointer.
 pub fn sp() -> u64 {
     let val: u64;

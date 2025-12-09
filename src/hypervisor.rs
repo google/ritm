@@ -179,10 +179,6 @@ unsafe fn handle_psci(fn_id: u64, arg0: u64, arg1: u64, arg2: u64) -> Result<u64
     #[allow(clippy::enum_glob_use)]
     use arm_psci::Function::*;
 
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "the fn_id is a u32 per specification, so can be truncated"
-    )]
     let psci_fn = arm_psci::Function::try_from(&[fn_id, arg0, arg1, arg2])?;
     match psci_fn {
         CpuSuspend { state, entry } => {
@@ -213,7 +209,10 @@ unsafe fn handle_psci(fn_id: u64, arg0: u64, arg1: u64, arg2: u64) -> Result<u64
             smc_args[0] = arg0;
             smc_args[1] = arg1;
             smc_args[2] = arg2;
-            #[allow(clippy::cast_possible_truncation)]
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "the fn_id is a u32 per specification, so can be truncated"
+            )]
             let result = smccc::smc64(fn_id as u32, smc_args);
             Ok(result[0])
         }
