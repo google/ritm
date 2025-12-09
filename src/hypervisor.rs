@@ -13,7 +13,11 @@ use alloc::boxed::Box;
 use log::debug;
 use spin::mutex::SpinMutex;
 
-use crate::{arch::{self, esr, far}, platform::{Platform, PlatformImpl}, simple_map::SimpleMap};
+use crate::{
+    arch::{self, esr, far},
+    platform::{Platform, PlatformImpl},
+    simple_map::SimpleMap,
+};
 
 /// Entry point for EL1 execution.
 ///
@@ -318,7 +322,8 @@ unsafe extern "C" fn cpu_resume() -> ! {
 }
 
 const MAX_CORES: usize = <PlatformImpl as Platform>::MAX_CORES;
-static SUSPEND_CONTEXTS: SpinMutex<SimpleMap<u64, SuspendContext, MAX_CORES>> = SpinMutex::new(SimpleMap::new());
+static SUSPEND_CONTEXTS: SpinMutex<SimpleMap<u64, SuspendContext, MAX_CORES>> =
+    SpinMutex::new(SimpleMap::new());
 
 /// The class of an exception.
 #[derive(Debug)]
@@ -344,12 +349,12 @@ impl ExceptionClass {
 
 /// The number of pages to allocate for each secondary core stack.
 const SECONDARY_STACK_PAGE_COUNT: usize = 4;
-static SECONDARY_STACKS: SpinMutex<SimpleMap<u64, Box<Stack<SECONDARY_STACK_PAGE_COUNT>>, MAX_CORES>> =
-    SpinMutex::new(SimpleMap::new());
+static SECONDARY_STACKS: SpinMutex<
+    SimpleMap<u64, Box<Stack<SECONDARY_STACK_PAGE_COUNT>>, MAX_CORES>,
+> = SpinMutex::new(SimpleMap::new());
 
 fn get_secondary_stack(mpidr: u64) -> *mut Stack<SECONDARY_STACK_PAGE_COUNT> {
-    let mut stack_map = SECONDARY_STACKS
-        .lock();
+    let mut stack_map = SECONDARY_STACKS.lock();
     if let Some(stack) = stack_map.get_mut(&mpidr) {
         &raw mut **stack
     } else {
