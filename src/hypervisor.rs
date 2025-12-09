@@ -9,7 +9,7 @@
 use core::arch::naked_asm;
 
 use aarch64_rt::{RegisterStateRef, Stack};
-use alloc::{boxed::Box, collections::btree_map::BTreeMap};
+use alloc::boxed::Box;
 use log::debug;
 use spin::mutex::SpinMutex;
 
@@ -26,8 +26,6 @@ use crate::{arch::{self, esr, far}, platform::{Platform, PlatformImpl}, simple_m
 /// address for EL1 execution that never returns.
 /// This function must be called in EL2.
 pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_point: u64) -> ! {
-    arch::disable_mmu_and_caches();
-
     // Setup EL1
     // SAFETY: We are configuring HCR_EL2 to allow EL1 execution.
     unsafe {
@@ -98,7 +96,13 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
 /// This function must be called in EL2.
 #[unsafe(naked)]
 pub unsafe extern "C" fn eret_to_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
-    naked_asm!("eret");
+    naked_asm!(
+        "mov x19, x0",
+        "bl {disable_mmu_and_caches}",
+        "mov x0, x19",
+        "eret",
+        disable_mmu_and_caches = sym arch::disable_mmu_and_caches,
+    );
 }
 
 pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
@@ -349,6 +353,6 @@ fn get_secondary_stack(mpidr: u64) -> *mut Stack<SECONDARY_STACK_PAGE_COUNT> {
     if let Some(stack) = stack_map.get_mut(&mpidr) {
         &raw mut **stack
     } else {
-        &raw mut **stack_map.insert(mpidr, Default::default())
+        &raw mut **stack_map.insert(mpidr, Box::default())
     }
 }

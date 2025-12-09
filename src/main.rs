@@ -34,7 +34,6 @@ use log::{LevelFilter, info};
 use spin::mutex::{SpinMutex, SpinMutexGuard};
 
 use crate::{
-    arch::disable_mmu_and_caches,
     exceptions::Exceptions,
     platform::{BootMode, Platform, PlatformImpl},
 };

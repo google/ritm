@@ -35,6 +35,7 @@ pub fn isb() {
 }
 
 /// Invalidate all instruction caches.
+#[allow(dead_code)]
 pub fn ic_iallu() {
     // SAFETY: `ic iallu` is always safe.
     unsafe {
@@ -43,6 +44,7 @@ pub fn ic_iallu() {
 }
 
 /// Invalidate all TLB entries for EL2.
+#[allow(dead_code)]
 pub fn tlbi_alle2is() {
     // SAFETY: `tlbi alle2is` is always safe.
     unsafe {
