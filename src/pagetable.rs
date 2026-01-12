@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::platform::PlatformImpl;
-use aarch64_paging::paging::Attributes;
+use aarch64_paging::descriptor::Attributes;
 use aarch64_rt::initial_pagetable;
 
 /// Attributes to use for device memory in the initial identity map.
