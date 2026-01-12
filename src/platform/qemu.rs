@@ -83,7 +83,7 @@ impl Platform for Qemu {
         // See `linker/qemu.ld` for the address reference.
         let mut res = Vec::<u8>::new();
         res.extend_from_slice(&0x4040_0000u64.to_be_bytes());
-        res.extend_from_slice(&(124u64 * 1024 * 1024).to_be_bytes()); // 128 MiB default - 4 MiB reserved
+        res.extend_from_slice(&(8188u64 * 1024 * 1024).to_be_bytes()); // 128 MiB default - 4 MiB reserved
 
         dt.root_mut()
             .remove_child("memory@40000000")

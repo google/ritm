@@ -24,6 +24,9 @@ safe-mmio = "0.2"
 smccc = "0.2"
 spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-features = false }
 
+[patch.crates-io]
+aarch64-rt = { path = "/usr/local/google/home/mmac/code/aarch64-rt" }
+
 [lints.rust]
 deprecated-safe = "warn"
 keyword-idents = "warn"

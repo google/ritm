@@ -8,7 +8,7 @@
 
 use core::{arch::naked_asm, mem::offset_of};
 
-use aarch64_rt::{RegisterStateRef, Stack};
+use aarch64_rt::{RegisterStateRef, Stack, SuspendContext, warm_boot_entry};
 use alloc::boxed::Box;
 use log::debug;
 use spin::mutex::SpinMutex;
@@ -244,17 +244,20 @@ fn psci_cpu_suspend(power_state: arm_psci::PowerState, entry: arm_psci::EntryPoi
     // SAFETY: Reading MPIDR_EL1 is safe.
     let mpidr = unsafe { arch::mpidr_el1::read() };
     let context = SuspendContext {
-        mpidr,
-        entry_point: entry.entry_point_address(),
-        context_id: entry.context_id(),
-        stack_pointer: arch::sp(),
+        stack_ptr: get_secondary_stack(mpidr).wrapping_add(1) as usize as u64,
+        entry: restore_from_suspend,
+        data: SuspendCoreData {
+            mpidr,
+            entry_point: entry.entry_point_address(),
+            context_id: entry.context_id(),
+        },
     };
 
     let context_ptr = core::ptr::from_mut(SUSPEND_CONTEXTS.lock().insert(mpidr, context));
 
     let result = smccc::psci::cpu_suspend::<smccc::Smc>(
         power_state.into(),
-        cpu_resume as usize as u64,
+        warm_boot_entry::<SuspendCoreData> as usize as u64,
         context_ptr as u64,
     );
 
@@ -267,13 +270,11 @@ fn psci_cpu_suspend(power_state: arm_psci::PowerState, entry: arm_psci::EntryPoi
     }
 }
 
-#[derive(Clone, Copy)]
-#[repr(C)]
-struct SuspendContext {
+#[derive(Debug, Clone, Copy)]
+struct SuspendCoreData {
     mpidr: u64,
     entry_point: u64,
     context_id: u64,
-    stack_pointer: u64,
 }
 
 /// Restores the environment after a suspend.
@@ -282,46 +283,25 @@ struct SuspendContext {
 ///
 /// The caller must ensure the entry pointer and `context_id` for given mpidr saved in
 /// [`SUSPEND_CONTEXTS`] is valid.
-unsafe extern "C" fn restore_from_suspend(mpidr: u64) -> ! {
+extern "C" fn restore_from_suspend(context: &mut SuspendContext<SuspendCoreData>) -> ! {
     let context = SUSPEND_CONTEXTS
         .lock()
-        .remove(&mpidr)
+        .remove(&context.data.mpidr)
         .expect("context not found for resuming CPU");
     debug!(
         "Restoring from suspend: entry={:#x}, ctx={:#x}",
-        context.entry_point, context.context_id
+        context.data.entry_point, context.data.context_id
     );
 
     // SAFETY: We are restoring the execution of the guest, assuming the entry point and
     // context_id we saved earlier from the guest is valid.
     unsafe {
-        entry_point_el1(context.context_id, 0, 0, 0, context.entry_point);
+        entry_point_el1(context.data.context_id, 0, 0, 0, context.data.entry_point);
     }
 }
 
-/// Trampoline for CPU resume.
-///
-/// # Safety
-///
-/// The caller must ensure that the context pointer passed to this function is valid
-/// to read, and that the entry pointer and `context_id` for given mpidr saved in
-/// [`SUSPEND_CONTEXTS`] are valid.
-#[unsafe(naked)]
-unsafe extern "C" fn cpu_resume(context: *mut SuspendContext) -> ! {
-    naked_asm!(
-        // x0 contains the context pointer passed to CPU_SUSPEND
-        "ldr x0, [x0, #{mpidr_offset}]", // Load mpidr (offset 0) into x0
-        "ldr x1, [x0, #{stack_offset}]", // Load stack_pointer (offset 24) into x1
-        "mov sp, x1",
-        "b {restore_from_suspend}",
-        mpidr_offset = const offset_of!(SuspendContext, mpidr),
-        stack_offset = const offset_of!(SuspendContext, stack_pointer),
-        restore_from_suspend = sym restore_from_suspend,
-    );
-}
-
 const MAX_CORES: usize = <PlatformImpl as Platform>::MAX_CORES;
-static SUSPEND_CONTEXTS: SpinMutex<SimpleMap<u64, SuspendContext, MAX_CORES>> =
+static SUSPEND_CONTEXTS: SpinMutex<SimpleMap<u64, SuspendContext<SuspendCoreData>, MAX_CORES>> =
     SpinMutex::new(SimpleMap::new());
 
 /// The class of an exception.
