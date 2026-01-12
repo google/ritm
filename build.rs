@@ -57,20 +57,21 @@ fn handle_payload() {
     });
 
     let payload_size = metadata.len();
-    let out_dir = env::var("OUT_DIR").unwrap();
+    let out_dir = env::var("OUT_DIR").expect("OUT_DIR is expected to be set in build.rs");
     let dest_path = Path::new(&out_dir).join("payload_constants.rs");
 
     fs::write(
         &dest_path,
         format!(
             r#"
-        pub const PAYLOAD_SIZE: usize = {size};
-        pub const PAYLOAD_DATA: &[u8; {size}] = include_bytes!(env!("RITM_PAYLOAD_PATH"));
-        "#,
-            size = payload_size
+        #[allow(clippy::unreadable_literal)]
+        pub const PAYLOAD_SIZE: usize = {payload_size};
+        #[allow(clippy::unreadable_literal)]
+        pub const PAYLOAD_DATA: &[u8; {payload_size}] = include_bytes!(env!("RITM_PAYLOAD_PATH"));
+        "#
         ),
     )
-    .unwrap();
+    .expect("Failed to write to {dest_path}");
 
     println!(
         "cargo:rustc-env=RITM_PAYLOAD_PATH={}",
