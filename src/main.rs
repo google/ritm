@@ -84,23 +84,20 @@ fn add_to_heap<const ORDER: usize>(heap: &mut Heap<ORDER>, range: &'static mut [
 /// # Safety
 ///
 /// `NEXT_IMAGE` must point to a valid executable piece of code which never returns.
-unsafe fn run_payload_el2(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
-    disable_mmu_and_caches();
-    // SAFETY: The caller guarantees that `NEXT_IMAGE` points to a valid executable piece of code which never returns.
-    unsafe {
-        jump_to_payload(x0, x1, x2, x3);
-    }
-}
-
-/// Jumps to the payload.
-///
-/// # Safety
-///
-/// `NEXT_IMAGE` must point to a valid executable piece of code which never returns.
 #[unsafe(naked)]
-unsafe extern "C" fn jump_to_payload(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
+unsafe extern "C" fn run_payload_el2(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     naked_asm!(
+        "mov x19, x0",
+        "mov x20, x1",
+        "mov x21, x2",
+        "mov x22, x3",
+        "bl {disable_mmu_and_caches}",
+        "mov x0, x19",
+        "mov x1, x20",
+        "mov x2, x21",
+        "mov x3, x22",
         "b {next_image}",
+        disable_mmu_and_caches = sym disable_mmu_and_caches,
         next_image = sym NEXT_IMAGE,
     );
 }

@@ -8,7 +8,7 @@
 
 //! Architecture-specific code.
 
-use core::arch::asm;
+use core::arch::{asm, naked_asm};
 
 /// Data Synchronization Barrier.
 pub fn dsb() {
@@ -57,16 +57,8 @@ macro_rules! sys_reg {
             $(pub const $const_name: u64 = $const_val;)*
 
             #[doc = concat!("Read the `", stringify!($name), "` system register.")]
-            ///
-            /// # Safety
-            ///
-            /// This function emits a raw `MRS` instruction. The caller must guarantee that:
-            ///
-            /// * The register is readable at the current Exception Level.
-            /// * Reading the register does not destructively alter hardware state (e.g.,
-            ///     acknowledging an interrupt by reading `ICC_IAR1_EL1`).
             #[allow(unused)]
-            pub unsafe fn read() -> u64 {
+            pub fn read() -> u64 {
                 let val: u64;
                 // SAFETY: The caller must ensure that the register is safely readable.
                 unsafe {
@@ -116,33 +108,54 @@ sys_reg!(spsr_el2);
 sys_reg!(elr_el2);
 sys_reg!(sp_el1);
 
-pub(super) fn disable_mmu_and_caches() {
+/// Disables MMU and caches.
+///
+/// # Safety
+///
+/// The compiler is free to emit atomic memory accesses in safe Rust code, but these have
+/// undefined behavior when the data cache is disabled. It's not safe to run Rust code with
+/// the MMU disabled. This function is not therefore only intended to be called by
+/// assembly code.
+///
+/// # Registers
+///
+/// This function clobbers x27 and x28.
+#[unsafe(naked)]
+pub(super) unsafe extern "C" fn disable_mmu_and_caches() {
+    naked_asm!(
+        "mov x27, x29",
+        "mov x28, x30",
+        "bl {disable_mmu_and_caches_impl}",
+        // We assume we have an identity mapped pagetables for the currently running
+        // code, so disabling MMU is safe.
+        "msr sctlr_el2, x0",
+        "mov x29, x27",
+        "mov x30, x28",
+        "dsb sy",
+        "isb",
+
+        // Invalidate I-cache
+        "ic iallu",
+        "tlbi alle2is",
+
+        // Final synchronization
+        "dsb sy",
+        "isb",
+        "ret",
+        disable_mmu_and_caches_impl = sym disable_mmu_and_caches_impl,
+    );
+}
+
+/// Invalidates dcache and returns new value for the `sctlr` register to be set.
+extern "C" fn disable_mmu_and_caches_impl() -> u64 {
     invalidate_dcache();
 
     // Disable MMU and caches
-    let mut sctlr: u64;
-    // SAFETY: We are reading a non-destructive register at our current Exception Level.
-    unsafe {
-        sctlr = sctlr_el2::read();
-    }
+    let mut sctlr = sctlr_el2::read();
     sctlr &= !sctlr_el2::M; // MMU Enable
     sctlr &= !sctlr_el2::C; // Data Cache Enable
     sctlr &= !sctlr_el2::I; // Instruction Cache Enable
-    // SAFETY: We assume we have an identity mapped pagetables for the currently running
-    // code, so disabling MMU is safe.
-    unsafe {
-        sctlr_el2::write(sctlr);
-    }
-    dsb();
-    isb();
-
-    // Invalidate I-cache
-    ic_iallu();
-    tlbi_alle2is();
-
-    // Final synchronization
-    dsb();
-    isb();
+    sctlr
 }
 
 /// Invalidate D-cache by set/way to the point of coherency.
@@ -150,11 +163,7 @@ pub fn invalidate_dcache() {
     dmb();
 
     // Cache Level ID Register
-    let clidr: u64;
-    // SAFETY: We are reading a non-destructive register at a higher Exception Level.
-    unsafe {
-        clidr = clidr_el1::read();
-    }
+    let clidr = clidr_el1::read();
 
     // Level of Coherence (LoC) - Bits [26:24]
     let loc = (clidr >> 24) & 0x7;
@@ -178,11 +187,7 @@ pub fn invalidate_dcache() {
         isb();
 
         // Cache Size ID Register (CCSIDR)
-        let ccsidr: u64;
-        // SAFETY: We are reading a non-destructive register at a higher Exception Level.
-        unsafe {
-            ccsidr = ccsidr_el1::read();
-        }
+        let ccsidr = ccsidr_el1::read();
 
         let line_power = (ccsidr & 0x7) + 4;
         let ways = (ccsidr >> 3) & 0x3FF;
