@@ -15,8 +15,7 @@ aarch64-rt = { version = "0.4", features = ["el2", "exceptions", "initial-pageta
 arm-pl011-uart = "0.4"
 arm-psci = "0.2"
 buddy_system_allocator = { version = "0.11", default-features = false, features = ["alloc", "use_spin"] }
-# TODO: replace with a crates.io version when it's released
-dtoolkit = { version = "0.1", git = "ssh://git@github.com/google/dtoolkit.git", rev = "35c8644de5fd2ff0098cfd8e493a8cffc163cf04", features = ["write"] }
+dtoolkit = { version = "0.1", features = ["write"] }
 embedded-io = "0.7"
 log = "0.4"
 percore = "0.2"

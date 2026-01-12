@@ -85,10 +85,10 @@ impl Platform for Qemu {
         res.extend_from_slice(&0x4040_0000u64.to_be_bytes());
         res.extend_from_slice(&(8188u64 * 1024 * 1024).to_be_bytes()); // 128 MiB default - 4 MiB reserved
 
-        dt.root_mut()
+        dt.root
             .remove_child("memory@40000000")
             .expect("memory node not found");
-        dt.root_mut().add_child(
+        dt.root.add_child(
             DeviceTreeNode::builder("memory@40400000")
                 .property(DeviceTreeProperty::new("reg", res))
                 .property(DeviceTreeProperty::new("device_type", b"memory\0"))
