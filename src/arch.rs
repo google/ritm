@@ -44,7 +44,7 @@ macro_rules! sys_reg {
             #[allow(unused)]
             pub fn read() -> u64 {
                 let val: u64;
-                // SAFETY: The caller must ensure that the register is safely readable.
+                // SAFETY: Reading a register is always safe.
                 unsafe {
                     asm!(concat!("mrs {}, ", stringify!($name)), out(reg) val, options(nostack, preserves_flags));
                 }
@@ -98,8 +98,10 @@ sys_reg!(sp_el1);
 ///
 /// The compiler is free to emit atomic memory accesses in safe Rust code, but these have
 /// undefined behavior when the data cache is disabled. It's not safe to run Rust code with
-/// the MMU disabled. This function is not therefore only intended to be called by
+/// the MMU disabled. This function is therefore *only* intended to be called by
 /// assembly code.
+///
+/// The caller must ensure there are identity mapped pagetables for the code executed.
 ///
 /// # Registers
 ///
@@ -110,7 +112,7 @@ pub(super) unsafe extern "C" fn disable_mmu_and_caches() {
         "mov x27, x29",
         "mov x28, x30",
         "bl {disable_mmu_and_caches_impl}",
-        // We assume we have an identity mapped pagetables for the currently running
+        // We assume we have identity mapped pagetables for the currently running
         // code, so disabling MMU is safe.
         "msr sctlr_el2, x0",
         "mov x29, x27",
