@@ -34,22 +34,6 @@ pub fn isb() {
     }
 }
 
-/// Invalidate all instruction caches.
-pub fn ic_iallu() {
-    // SAFETY: `ic iallu` is always safe.
-    unsafe {
-        asm!("ic iallu", options(nostack, preserves_flags));
-    }
-}
-
-/// Invalidate all TLB entries for EL2.
-pub fn tlbi_alle2is() {
-    // SAFETY: `tlbi alle2is` is always safe.
-    unsafe {
-        asm!("tlbi alle2is", options(nostack, preserves_flags));
-    }
-}
-
 macro_rules! sys_reg {
     ($name:ident, {$($const_name:ident: $const_val:expr),*}) => {
         pub mod $name {
