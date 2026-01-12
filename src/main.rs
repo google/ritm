@@ -18,6 +18,10 @@ mod logger;
 mod pagetable;
 mod platform;
 
+mod payload_constants {
+    include!(concat!(env!("OUT_DIR"), "/payload_constants.rs"));
+}
+
 use aarch64_paging::paging::PAGE_SIZE;
 use aarch64_rt::entry;
 use buddy_system_allocator::{Heap, LockedHeap};
@@ -42,9 +46,8 @@ static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
 #[repr(align(0x200000))] // Linux requires 2MB alignment
 struct AlignImage<T>(T);
 
-static NEXT_IMAGE: AlignImage<[u8; 18_815_488]> = AlignImage(*include_bytes!(
-    "/usr/local/google/home/mmac/code/linux/arch/arm64/boot/Image"
-));
+static NEXT_IMAGE: AlignImage<[u8; payload_constants::PAYLOAD_SIZE]> =
+    AlignImage(*payload_constants::PAYLOAD_DATA);
 
 entry!(main);
 fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
