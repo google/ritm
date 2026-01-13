@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use core::{arch::naked_asm, mem::offset_of};
+use core::arch::naked_asm;
 
 use aarch64_rt::{RegisterStateRef, Stack, SuspendContext, warm_boot_entry};
 use alloc::boxed::Box;
@@ -242,7 +242,7 @@ fn psci_cpu_on(
 
 fn psci_cpu_suspend(power_state: arm_psci::PowerState, entry: arm_psci::EntryPoint) -> u64 {
     // SAFETY: Reading MPIDR_EL1 is safe.
-    let mpidr = unsafe { arch::mpidr_el1::read() };
+    let mpidr = arch::mpidr_el1::read();
     let context = SuspendContext {
         stack_ptr: get_secondary_stack(mpidr).wrapping_add(1) as usize as u64,
         entry: restore_from_suspend,

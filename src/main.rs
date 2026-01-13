@@ -49,6 +49,7 @@ static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
 #[repr(align(0x200000))] // Linux requires 2MB alignment
 struct AlignImage<T>(T);
 
+#[unsafe(link_section = ".payload")]
 static NEXT_IMAGE: AlignImage<[u8; payload_constants::PAYLOAD_SIZE]> =
     AlignImage(*payload_constants::PAYLOAD_DATA);
 
@@ -121,7 +122,7 @@ unsafe extern "C" fn run_payload_el2(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
         "mov x2, x21",
         "mov x3, x22",
         "b {next_image}",
-        disable_mmu_and_caches = sym disable_mmu_and_caches,
+        disable_mmu_and_caches = sym arch::disable_mmu_and_caches,
         next_image = sym NEXT_IMAGE,
     );
 }

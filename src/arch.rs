@@ -34,14 +34,6 @@ pub fn isb() {
     }
 }
 
-/// Get the current stack pointer.
-pub fn sp() -> u64 {
-    let val: u64;
-    // SAFETY: Reading from the sp register is always safe.
-    unsafe { asm!("mov {}, sp", out(reg) val, options(nostack)) };
-    val
-}
-
 pub fn esr() -> u64 {
     let mut esr: u64;
     // SAFETY: Reading esr is always safe.
