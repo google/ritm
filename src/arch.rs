@@ -105,8 +105,8 @@ sys_reg!(csselr_el1);
 sys_reg!(ccsidr_el1);
 sys_reg!(hcr_el2, {
     RW: 1 << 31,
-    TID1: 1 << 19,
-    AMO: 1 << 4
+    TSC: 1 << 19,
+    IMO: 1 << 4
 });
 sys_reg!(cntvoff_el2);
 sys_reg!(cnthctl_el2, {

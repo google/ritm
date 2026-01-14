@@ -35,8 +35,8 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
     unsafe {
         let mut hcr = arch::hcr_el2::read();
         hcr |= arch::hcr_el2::RW;
-        hcr |= arch::hcr_el2::TID1;
-        hcr &= !arch::hcr_el2::AMO;
+        hcr |= arch::hcr_el2::TSC;
+        hcr &= !arch::hcr_el2::IMO;
         arch::hcr_el2::write(hcr);
     }
 
