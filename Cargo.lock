@@ -14,9 +14,8 @@ dependencies = [
 
 [[package]]
 name = "aarch64-rt"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a21dc662bf8045ff4a57989d927607b71654b902f0a1976ec3e7fbb30a1477aa"
+version = "0.4.2"
+source = "git+https://github.com/m4tx/aarch64-rt.git?rev=b5783edd5e5d5555105946c462646572d3454d99#b5783edd5e5d5555105946c462646572d3454d99"
 dependencies = [
  "smccc",
 ]
@@ -36,6 +35,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "arm-psci"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb260c93c22f6aa06dd87a2cee5dfe79554c6ae228ec8fd256b31293e3d188ff"
+dependencies = [
+ "bitflags",
+ "num_enum",
+ "thiserror",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -48,6 +58,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1a0108968a3a2dab95b089c0fc3f1afa7759aa5ebe6f1d86d206d6f7ba726eb"
 dependencies = [
  "spin 0.9.8",
+]
+
+[[package]]
+name = "dtoolkit"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5427b960bccbff1c40fd8a246b346e3959551cb35bd93fc44fdbe292dfc455c9"
+dependencies = [
+ "indexmap",
+ "thiserror",
+ "twox-hash",
+ "zerocopy",
 ]
 
 [[package]]
@@ -73,6 +95,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9eb1aa714776b75c7e67e1da744b81a129b3ff919c8712b5e1b32252c1f07cc7"
 
 [[package]]
+name = "equivalent"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "hashbrown"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
+
+[[package]]
+name = "indexmap"
+version = "2.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ad4bb2b565bca0645f4d68c5c9af97fba094e9791da685bf83cb5f3ce74acf2"
+dependencies = [
+ "equivalent",
+ "hashbrown",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -92,6 +136,27 @@ name = "nb"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
+
+[[package]]
+name = "num_enum"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1207a7e20ad57b847bbddc6776b968420d38292bbfe2089accff5e19e82454c"
+dependencies = [
+ "num_enum_derive",
+ "rustversion",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff32365de1b6743cb203b710788263c44a03de03802daf96092f2da4fe6ba4d7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "percore"
@@ -127,7 +192,9 @@ dependencies = [
  "aarch64-paging",
  "aarch64-rt",
  "arm-pl011-uart",
+ "arm-psci",
  "buddy_system_allocator",
+ "dtoolkit",
  "embedded-io",
  "log",
  "percore",
@@ -135,6 +202,12 @@ dependencies = [
  "smccc",
  "spin 0.10.0",
 ]
+
+[[package]]
+name = "rustversion"
+version = "1.0.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "safe-mmio"
@@ -205,6 +278,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "twox-hash"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c"
 
 [[package]]
 name = "unicode-ident"
