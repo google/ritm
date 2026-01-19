@@ -38,6 +38,14 @@ pub fn isb() {
     }
 }
 
+/// TLBI VMALLS12E1 - VMID-based Stage-1/Stage-2 combined invalidation for the EL1&0 regime.
+pub fn tlbi_vmalls12e1() {
+    // SAFETY: TLBI VMALLS12E1 is always safe.
+    unsafe {
+        asm!("tlbi vmalls12e1", options(nostack, preserves_flags));
+    }
+}
+
 pub fn esr() -> u64 {
     let mut esr: u64;
     // SAFETY: Reading esr is always safe.
