@@ -33,9 +33,12 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
     // Setup EL1
     // SAFETY: We are configuring HCR_EL2 to allow EL1 execution.
     unsafe {
+        setup_stage2();
+
         let mut hcr = arch::hcr_el2::read();
         hcr |= arch::hcr_el2::RW;
         hcr |= arch::hcr_el2::TSC;
+        hcr |= arch::hcr_el2::VM;
         hcr &= !arch::hcr_el2::IMO;
         arch::hcr_el2::write(hcr);
     }
@@ -81,6 +84,37 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
     }
 }
 
+fn setup_stage2() {
+    debug!("Setting up stage 2 page table");
+    let idmap = Box::new(PlatformImpl::make_stage2_pagetable());
+
+    let root_pa = idmap.root_address().0;
+    debug!("Root PA: {root_pa:#x}");
+    let idmap = Box::leak(idmap);
+
+    // Activate the page table
+    // SAFETY: We are initializing the Stage 2 translation. The guest is not running yet.
+    unsafe {
+        let ttbr = idmap.activate();
+        debug!("idmap.activate() returned ttbr={ttbr:#x}");
+
+        let vtcr = arch::vtcr_el2::PS_40BIT
+            | arch::vtcr_el2::TG0_4KB
+            | arch::vtcr_el2::SH0_INNER
+            | arch::vtcr_el2::ORGN0_WB_RA_WA
+            | arch::vtcr_el2::IRGN0_WB_RA_WA
+            | arch::vtcr_el2::SL0_L0
+            | arch::vtcr_el2::T0SZ_40BIT;
+        debug!("Writing VTCR_EL2={vtcr:#x}...");
+        arch::vtcr_el2::write(vtcr);
+
+        arch::tlbi_vmalls12e1();
+        arch::dsb();
+        arch::isb();
+        debug!("Stage 2 activation complete.");
+    }
+}
+
 /// Returns to EL1.
 ///
 /// This function executes the `eret` instruction to return to EL1 with the provided arguments.
@@ -122,13 +156,53 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
                 }
             }
         }
-        ExceptionClass::Unknown(_) => {
+        ExceptionClass::Unknown(val) => {
             panic!(
-                "Unexpected sync_lower, far={:#x}, register_state={register_state:?}",
+                "Unexpected sync_lower, esr={esr:#x}, ec={val:#x}, far={:#x}, register_state={register_state:?}",
                 far(),
             );
         }
+        ExceptionClass::DataAbortLowerEL => {
+            inject_data_abort(&mut register_state);
+        }
     }
+}
+
+fn inject_data_abort(register_state: &mut RegisterStateRef) {
+    // SAFETY: We are modifying the saved register state to redirect execution.
+    let regs = unsafe { register_state.get_mut() };
+    let fault_addr = far();
+    let syndrome = esr();
+
+    debug!("Injecting data abort to guest: fault_addr={fault_addr:#x}, syndrome={syndrome:#x}");
+
+    // Read guest VBAR
+    let vbar = arch::vbar_el1::read();
+    assert!(
+        vbar != 0,
+        "Guest VBAR_EL1 is 0, cannot inject data abort. Fault addr: {fault_addr:#x}"
+    );
+    let handler = vbar + 0x200; // Current EL with SPx Sync
+
+    // Save current context to guest EL1 regs
+    // SAFETY: We are accessing EL1 system registers to inject exception.
+    unsafe {
+        arch::elr_el1::write(regs.elr as u64);
+        arch::spsr_el1::write(regs.spsr);
+        arch::esr_el1::write(syndrome);
+        arch::far_el1::write(fault_addr);
+    }
+
+    // Redirect execution
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "only 64-bit target is supported"
+    )]
+    {
+        regs.elr = handler as usize;
+    }
+    // Mask all interrupts (DAIF) and set mode to EL1h (0x5)
+    regs.spsr = 0x3C5;
 }
 
 const AARCH64_INSTRUCTION_LENGTH: usize = 4;
@@ -311,6 +385,8 @@ enum ExceptionClass {
     HvcTrappedInAArch64,
     /// SMC instruction execution in `AArch64` state.
     SmcTrappedInAArch64,
+    /// Data Abort taken without a change in Exception Level.
+    DataAbortLowerEL,
     #[allow(unused)]
     /// Unknown exception class.
     Unknown(u8),
@@ -321,6 +397,7 @@ impl ExceptionClass {
         match value {
             0x16 => Self::HvcTrappedInAArch64,
             0x17 => Self::SmcTrappedInAArch64,
+            0x24 => Self::DataAbortLowerEL,
             _ => Self::Unknown(value),
         }
     }

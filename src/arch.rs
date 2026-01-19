@@ -34,6 +34,14 @@ pub fn isb() {
     }
 }
 
+/// TLBI VMALLS12E1 - VMID-based Stage-1/Stage-2 combined invalidation for the EL1&0 regime.
+pub fn tlbi_vmalls12e1() {
+    // SAFETY: TLBI VMALLS12E1 is always safe.
+    unsafe {
+        asm!("tlbi vmalls12e1", options(nostack, preserves_flags));
+    }
+}
+
 pub fn esr() -> u64 {
     let mut esr: u64;
     // SAFETY: Reading esr is always safe.
@@ -106,7 +114,8 @@ sys_reg!(ccsidr_el1);
 sys_reg!(hcr_el2, {
     RW: 1 << 31,
     TSC: 1 << 19,
-    IMO: 1 << 4
+    IMO: 1 << 4,
+    VM: 1 << 0
 });
 sys_reg!(cntvoff_el2);
 sys_reg!(cnthctl_el2, {
@@ -120,6 +129,20 @@ sys_reg!(spsr_el2, {
 sys_reg!(elr_el2);
 sys_reg!(sp_el1);
 sys_reg!(mpidr_el1);
+sys_reg!(vtcr_el2, {
+    PS_40BIT: 2 << 16,
+    TG0_4KB: 0 << 14,
+    SH0_INNER: 3 << 12,
+    ORGN0_WB_RA_WA: 1 << 10,
+    IRGN0_WB_RA_WA: 1 << 8,
+    SL0_L0: 2 << 6,
+    T0SZ_40BIT: 24
+});
+sys_reg!(vbar_el1);
+sys_reg!(elr_el1);
+sys_reg!(spsr_el1);
+sys_reg!(esr_el1);
+sys_reg!(far_el1);
 
 /// Disables MMU and caches.
 ///
