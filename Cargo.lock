@@ -5,8 +5,7 @@ version = 4
 [[package]]
 name = "aarch64-paging"
 version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fcde4fe4e43dff9326a54f5137de608f2b7f69e5a5f86fa8657f0db60a6ba2a"
+source = "git+https://github.com/m4tx/aarch64-paging.git?rev=6e28cdee945701821b7b5721b500e8e93f1a99b5#6e28cdee945701821b7b5721b500e8e93f1a99b5"
 dependencies = [
  "bitflags",
  "thiserror",
@@ -114,6 +113,14 @@ checksum = "0ad4bb2b565bca0645f4d68c5c9af97fba094e9791da685bf83cb5f3ce74acf2"
 dependencies = [
  "equivalent",
  "hashbrown",
+]
+
+[[package]]
+name = "isolation_test"
+version = "0.1.0"
+dependencies = [
+ "aarch64-rt",
+ "arm-pl011-uart",
 ]
 
 [[package]]
