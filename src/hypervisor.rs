@@ -9,12 +9,16 @@
 use core::arch::naked_asm;
 
 use aarch64_rt::{RegisterStateRef, Stack, SuspendContext, warm_boot_entry};
-use alloc::boxed::Box;
+use arm_sysregs::{
+    CnthctlEl2, CntvoffEl2, ElrEl2, EsrEl2, HcrEl2, MpidrEl1, SpsrEl2, read_cnthctl_el2,
+    read_hcr_el2, read_mpidr_el1, read_spsr_el2, write_cnthctl_el2, write_cntvoff_el2,
+    write_elr_el2, write_hcr_el2, write_spsr_el2,
+};
 use log::debug;
 use spin::mutex::SpinMutex;
 
 use crate::{
-    arch::{self, esr, far},
+    arch::{esr, far},
     platform::{Platform, PlatformImpl},
     simple_map::SimpleMap,
 };
@@ -31,46 +35,44 @@ use crate::{
 /// This function must be called in EL2.
 pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_point: u64) -> ! {
     // Setup EL1
+    let mut hcr = read_hcr_el2();
+    hcr.insert(HcrEl2::RW);
+    hcr.insert(HcrEl2::TSC);
+    hcr.remove(HcrEl2::IMO);
     // SAFETY: We are configuring HCR_EL2 to allow EL1 execution.
     unsafe {
-        let mut hcr = arch::hcr_el2::read();
-        hcr |= arch::hcr_el2::RW;
-        hcr |= arch::hcr_el2::TSC;
-        hcr &= !arch::hcr_el2::IMO;
-        arch::hcr_el2::write(hcr);
+        write_hcr_el2(hcr);
     }
 
     // Reset the timer offset.
-    // SAFETY: Resetting the CNTVOFF_EL2 is needed as part of
-    // preparing an environment to run Linux.
-    unsafe {
-        arch::cntvoff_el2::write(0);
-    }
+    write_cntvoff_el2(CntvoffEl2::default());
 
     // Allow access to timers
-    // SAFETY: Writing to CNTHCTL_EL2 is needed as part of
-    // preparing an environment to run Linux.
-    unsafe {
-        let mut cnthctl = arch::cnthctl_el2::read();
-        cnthctl |= arch::cnthctl_el2::ENABLE;
-        cnthctl |= arch::cnthctl_el2::IMASK;
-        arch::cnthctl_el2::write(cnthctl);
-    }
+    let mut cnthctl = read_cnthctl_el2();
+    cnthctl.insert(CnthctlEl2::EL0PCTEN);
+    cnthctl.insert(CnthctlEl2::EL1PCEN);
+    write_cnthctl_el2(cnthctl);
 
+    let mut spsr = read_spsr_el2();
     // Setup SPSR_EL2 to enter EL1h
+    const EL1H: u8 = 5;
+    spsr.set_m_3_0(EL1H);
     // Mask debug, SError, IRQ, and FIQ
+    spsr.insert(SpsrEl2::D);
+    spsr.insert(SpsrEl2::A);
+    spsr.insert(SpsrEl2::I);
+    spsr.insert(SpsrEl2::F);
     // SAFETY: Configuring SPSR_EL2 for the return to EL1.
     unsafe {
-        let mut spsr = arch::spsr_el2::read();
-        spsr |= arch::spsr_el2::MASK_ALL;
-        spsr |= arch::spsr_el2::EL1H;
-        arch::spsr_el2::write(spsr);
+        write_spsr_el2(spsr);
     }
 
     // Set ELR_EL2 to the kernel entry point
+    let mut elr = ElrEl2::default();
+    elr.set_addr(entry_point);
     // SAFETY: We trust the caller the entry point is valid.
     unsafe {
-        arch::elr_el2::write(entry_point);
+        write_elr_el2(elr);
     }
 
     // SAFETY: The caller ensures that the provided arguments are valid and that this is called
@@ -95,18 +97,74 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
 #[unsafe(naked)]
 pub unsafe extern "C" fn eret_to_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     naked_asm!(
-        "mov x19, x0",
-        "bl {disable_mmu_and_caches}",
-        "mov x0, x19",
+        // overwrite the registers to avoid leaking data from RITM
+        "mov x4, 0",
+        "mov x5, 0",
+        "mov x6, 0",
+        "mov x7, 0",
+        "mov x8, 0",
+        "mov x9, 0",
+        "mov x10, 0",
+        "mov x11, 0",
+        "mov x12, 0",
+        "mov x13, 0",
+        "mov x14, 0",
+        "mov x15, 0",
+        "mov x16, 0",
+        "mov x17, 0",
+        "mov x18, 0",
+        "mov x19, 0",
+        "mov x20, 0",
+        "mov x21, 0",
+        "mov x22, 0",
+        "mov x23, 0",
+        "mov x24, 0",
+        "mov x25, 0",
+        "mov x26, 0",
+        "mov x27, 0",
+        "mov x28, 0",
+        "mov x29, 0",
+        "mov x30, 0",
+        "movi v0.2d, #0",
+        "movi v1.2d, #0",
+        "movi v2.2d, #0",
+        "movi v3.2d, #0",
+        "movi v4.2d, #0",
+        "movi v5.2d, #0",
+        "movi v6.2d, #0",
+        "movi v7.2d, #0",
+        "movi v8.2d, #0",
+        "movi v9.2d, #0",
+        "movi v10.2d, #0",
+        "movi v11.2d, #0",
+        "movi v12.2d, #0",
+        "movi v13.2d, #0",
+        "movi v14.2d, #0",
+        "movi v15.2d, #0",
+        "movi v16.2d, #0",
+        "movi v17.2d, #0",
+        "movi v18.2d, #0",
+        "movi v19.2d, #0",
+        "movi v20.2d, #0",
+        "movi v21.2d, #0",
+        "movi v22.2d, #0",
+        "movi v23.2d, #0",
+        "movi v24.2d, #0",
+        "movi v25.2d, #0",
+        "movi v26.2d, #0",
+        "movi v27.2d, #0",
+        "movi v28.2d, #0",
+        "movi v29.2d, #0",
+        "movi v30.2d, #0",
+        "movi v31.2d, #0",
         "eret",
-        disable_mmu_and_caches = sym arch::disable_mmu_and_caches,
     );
 }
 
 pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
     let esr = esr();
-    let ec = u8::try_from((esr >> 26) & 0x3f).expect("`& 0x3f` guarantees the value fits in u8");
-    let ec = ExceptionClass::new(ec);
+    let esr_el2 = EsrEl2::from_bits_retain(esr);
+    let ec = ExceptionClass::new(esr_el2.ec());
 
     match ec {
         ExceptionClass::HvcTrappedInAArch64 | ExceptionClass::SmcTrappedInAArch64 => {
@@ -124,7 +182,8 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
         }
         ExceptionClass::Unknown(_) => {
             panic!(
-                "Unexpected sync_lower, far={:#x}, register_state={register_state:?}",
+                "Unexpected sync_lower, esr={:#x}, far={:#x}, register_state={register_state:?}",
+                esr,
                 far(),
             );
         }
@@ -139,9 +198,7 @@ fn try_handle_psci(register_state: &mut RegisterStateRef) -> Result<(), arm_psci
         "Forwarding the PSCI call: fn_id={fn_id:#x}, arg0={arg0:#x}, arg1={arg1:#x}, arg2={arg2:#x}"
     );
 
-    // SAFETY: We are handling a trapped HVC or SMC instruction, which is likely a PSCI call.
-    // The arguments are passed from the guest.
-    let out = unsafe { handle_psci(fn_id, arg0, arg1, arg2)? };
+    let out = handle_psci(fn_id, arg0, arg1, arg2)?;
     debug!("PSCI call output: out={out:#x}");
 
     // SAFETY: This is an answer to the guest calling HVC/SMC, so it expects x0..3 will
@@ -164,12 +221,7 @@ fn try_handle_psci(register_state: &mut RegisterStateRef) -> Result<(), arm_psci
 /// # Errors
 ///
 /// Returns an error when an unknown PSCI function has been called.
-///
-/// # Safety
-///
-/// This function is unsafe because it may call into the secure monitor via SMC or perform other
-/// privileged operations.
-unsafe fn handle_psci(fn_id: u64, arg0: u64, arg1: u64, arg2: u64) -> Result<u64, arm_psci::Error> {
+fn handle_psci(fn_id: u64, arg0: u64, arg1: u64, arg2: u64) -> Result<u64, arm_psci::Error> {
     #[allow(clippy::enum_glob_use)]
     use arm_psci::Function::*;
 
@@ -223,12 +275,13 @@ fn psci_cpu_on(
     mpidr: arm_psci::Mpidr,
     entry: arm_psci::EntryPoint,
 ) -> arm_psci::ReturnCode {
-    let mpidr: u64 = mpidr.into();
+    let mpidr_u64 = mpidr.into();
+    let mpidr = MpidrEl1::from_bits_retain(mpidr_u64);
     let stack = get_secondary_stack(mpidr);
 
     // SAFETY: aarch64_rt::start_core is safe to call with a valid stack.
     unsafe {
-        aarch64_rt::start_core::<smccc::Smc, _, _>(mpidr, stack, move || {
+        aarch64_rt::start_core::<smccc::Smc, _, _>(mpidr_u64, stack, move || {
             let entry_ptr = entry.entry_point_address();
             let arg = entry.context_id();
             debug!("Started core with fn_id={fn_id:#x}, mpidr={mpidr:#x}, entry_ptr={entry_ptr:#x}, arg={arg}");
@@ -241,13 +294,11 @@ fn psci_cpu_on(
 }
 
 fn psci_cpu_suspend(power_state: arm_psci::PowerState, entry: arm_psci::EntryPoint) -> u64 {
-    // SAFETY: Reading MPIDR_EL1 is safe.
-    let mpidr = arch::mpidr_el1::read();
+    let mpidr = read_mpidr_el1();
     let context = SuspendContext {
         stack_ptr: get_secondary_stack(mpidr).wrapping_add(1) as usize as u64,
         entry: restore_from_suspend,
         data: SuspendCoreData {
-            mpidr,
             entry_point: entry.entry_point_address(),
             context_id: entry.context_id(),
         },
@@ -272,7 +323,6 @@ fn psci_cpu_suspend(power_state: arm_psci::PowerState, entry: arm_psci::EntryPoi
 
 #[derive(Debug, Clone, Copy)]
 struct SuspendCoreData {
-    mpidr: u64,
     entry_point: u64,
     context_id: u64,
 }
@@ -283,10 +333,11 @@ struct SuspendCoreData {
 ///
 /// The caller must ensure the entry pointer and `context_id` for given mpidr saved in
 /// [`SUSPEND_CONTEXTS`] is valid.
-extern "C" fn restore_from_suspend(context: &mut SuspendContext<SuspendCoreData>) -> ! {
+extern "C" fn restore_from_suspend(_context: &mut SuspendContext<SuspendCoreData>) -> ! {
+    let mpidr = read_mpidr_el1();
     let context = SUSPEND_CONTEXTS
         .lock()
-        .remove(&context.data.mpidr)
+        .remove(&mpidr)
         .expect("context not found for resuming CPU");
     debug!(
         "Restoring from suspend: entry={:#x}, ctx={:#x}",
@@ -301,8 +352,9 @@ extern "C" fn restore_from_suspend(context: &mut SuspendContext<SuspendCoreData>
 }
 
 const MAX_CORES: usize = <PlatformImpl as Platform>::MAX_CORES;
-static SUSPEND_CONTEXTS: SpinMutex<SimpleMap<u64, SuspendContext<SuspendCoreData>, MAX_CORES>> =
-    SpinMutex::new(SimpleMap::new());
+static SUSPEND_CONTEXTS: SpinMutex<
+    SimpleMap<MpidrEl1, SuspendContext<SuspendCoreData>, MAX_CORES>,
+> = SpinMutex::new(SimpleMap::new());
 
 /// The class of an exception.
 #[derive(Debug)]
@@ -329,14 +381,25 @@ impl ExceptionClass {
 /// The number of pages to allocate for each secondary core stack.
 const SECONDARY_STACK_PAGE_COUNT: usize = 4;
 static SECONDARY_STACKS: SpinMutex<
-    SimpleMap<u64, Box<Stack<SECONDARY_STACK_PAGE_COUNT>>, MAX_CORES>,
+    SimpleMap<MpidrEl1, Stack<SECONDARY_STACK_PAGE_COUNT>, MAX_CORES>,
 > = SpinMutex::new(SimpleMap::new());
 
-fn get_secondary_stack(mpidr: u64) -> *mut Stack<SECONDARY_STACK_PAGE_COUNT> {
+/// Returns a pointer to a stack for a given CPU.
+///
+/// # Safety
+///
+/// The pointers are safe to read/write as long as the stack never exceeds
+/// `SECONDARY_STACK_PAGE_COUNT` in size.
+///
+/// The caller must ensure that pointers obtained for a specific CPU are only written
+/// by this CPU.
+fn get_secondary_stack(mpidr: MpidrEl1) -> *mut Stack<SECONDARY_STACK_PAGE_COUNT> {
     let mut stack_map = SECONDARY_STACKS.lock();
+    // We never remove items from the map, so each CPU always gets its own stack which never
+    // gets invalidated.
     if let Some(stack) = stack_map.get_mut(&mpidr) {
-        &raw mut **stack
+        &raw mut *stack
     } else {
-        &raw mut **stack_map.insert(mpidr, Box::default())
+        &raw mut *stack_map.insert(mpidr, Stack::default())
     }
 }
