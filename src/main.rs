@@ -37,6 +37,7 @@ use crate::{
     exceptions::Exceptions,
     platform::{BootMode, Platform, PlatformImpl},
 };
+use crate::arch::disable_mmu_and_caches;
 
 const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
@@ -122,7 +123,7 @@ unsafe extern "C" fn run_payload_el2(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
         "mov x2, x21",
         "mov x3, x22",
         "b {next_image}",
-        disable_mmu_and_caches = sym arch::disable_mmu_and_caches,
+        disable_mmu_and_caches = sym disable_mmu_and_caches,
         next_image = sym NEXT_IMAGE,
     );
 }
