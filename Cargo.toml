@@ -13,6 +13,7 @@ categories = ["embedded", "no-std"]
 aarch64-paging = { version = "0.11", default-features = false }
 aarch64-rt = { version = "0.3", features = ["el2", "exceptions", "initial-pagetable", "psci"], default-features = false }
 arm-pl011-uart = "0.4"
+arm-sysregs = { version = "0.2", features = ["el1", "el2"] }
 buddy_system_allocator = { version = "0.12", default-features = false, features = ["alloc", "use_spin"] }
 embedded-io = "0.7"
 log = "0.4"

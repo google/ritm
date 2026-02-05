@@ -8,6 +8,10 @@
 
 //! Architecture-specific code.
 
+use arm_sysregs::{
+    CacheLevel, CacheType, CsselrEl1, SctlrEl2, read_ccsidr_el1, read_clidr_el1, read_sctlr_el2,
+    write_csselr_el1,
+};
 use core::arch::{asm, naked_asm};
 
 /// Data Synchronization Barrier.
@@ -34,64 +38,6 @@ pub fn isb() {
     }
 }
 
-macro_rules! sys_reg {
-    ($name:ident, {$($const_name:ident: $const_val:expr),*}) => {
-        pub mod $name {
-            use core::arch::asm;
-            $(pub const $const_name: u64 = $const_val;)*
-
-            #[doc = concat!("Read the `", stringify!($name), "` system register.")]
-            #[allow(unused)]
-            pub fn read() -> u64 {
-                let val: u64;
-                // SAFETY: Reading a register is always safe.
-                unsafe {
-                    asm!(concat!("mrs {}, ", stringify!($name)), out(reg) val, options(nostack, preserves_flags));
-                }
-                val
-            }
-
-            #[doc = concat!("Write the `", stringify!($name), "` system register.")]
-            ///
-            /// # Safety
-            ///
-            /// This function allows fundamental changes to the CPU state. To avoid Undefined
-            /// Behavior, the caller must guarantee:
-            ///
-            /// * The register is writable at the current Exception Level.
-            /// * The write must not invalidate the stack, the heap, or any active Rust references
-            ///     (e.g., by disabling the MMU).
-            /// * This function emits a raw `MSR`. The caller is responsible for issuing context
-            ///     synchronization (e.g., `ISB`) or memory barriers (`DSB`) if required.
-            #[allow(unused)]
-            pub unsafe fn write(val: u64) {
-                // SAFETY: The caller must ensure that the register is safely writeable.
-                unsafe {
-                    asm!(concat!("msr ", stringify!($name), ", {}"), in(reg) val, options(nostack, preserves_flags));
-                }
-            }
-        }
-    };
-    ($name:ident) => {
-        sys_reg!($name, {});
-    };
-}
-
-sys_reg!(sctlr_el2, {
-    M: 1 << 0,
-    C: 1 << 2,
-    I: 1 << 12
-});
-sys_reg!(clidr_el1);
-sys_reg!(csselr_el1);
-sys_reg!(ccsidr_el1);
-sys_reg!(hcr_el2);
-sys_reg!(cntvoff_el2);
-sys_reg!(cnthctl_el2);
-sys_reg!(spsr_el2);
-sys_reg!(elr_el2);
-sys_reg!(sp_el1);
-
 /// Disables MMU and caches.
 ///
 /// # Safety
@@ -105,7 +51,7 @@ sys_reg!(sp_el1);
 ///
 /// # Registers
 ///
-/// This function clobbers x27 and x28.
+/// In addition to the regular caller-saved registers, this function clobbers x27 and x28.
 #[unsafe(naked)]
 pub(super) unsafe extern "C" fn disable_mmu_and_caches() {
     naked_asm!(
@@ -137,11 +83,11 @@ extern "C" fn disable_mmu_and_caches_impl() -> u64 {
     invalidate_dcache();
 
     // Disable MMU and caches
-    let mut sctlr = sctlr_el2::read();
-    sctlr &= !sctlr_el2::M; // MMU Enable
-    sctlr &= !sctlr_el2::C; // Data Cache Enable
-    sctlr &= !sctlr_el2::I; // Instruction Cache Enable
-    sctlr
+    let mut sctlr = read_sctlr_el2();
+    sctlr.remove(SctlrEl2::M); // MMU Enable
+    sctlr.remove(SctlrEl2::C); // Data Cache Enable
+    sctlr.remove(SctlrEl2::I); // Instruction Cache Enable
+    sctlr.bits()
 }
 
 /// Invalidate D-cache by set/way to the point of coherency.
@@ -149,41 +95,43 @@ pub fn invalidate_dcache() {
     dmb();
 
     // Cache Level ID Register
-    let clidr = clidr_el1::read();
+    let clidr = read_clidr_el1();
 
-    // Level of Coherence (LoC) - Bits [26:24]
-    let loc = (clidr >> 24) & 0x7;
+    // Level of Coherence (LoC)
+    let loc = clidr.loc();
 
-    for level in 0..loc {
-        let cache_type = (clidr >> (level * 3)) & 0x7;
-
-        // Cache Types: 0=None, 1=Instruction, 2=Data, 3=Split, 4=Unified
+    for level in 1..=loc {
         // We don't care about No cache or Instruction cache
-        if cache_type < 2 {
-            continue;
+        let level = CacheLevel::new(level);
+        match clidr.cache_type(level) {
+            CacheType::NoCache | CacheType::InstructionOnly => {
+                continue;
+            }
+            CacheType::DataOnly | CacheType::SeparateInstructionAndData | CacheType::Unified => {}
         }
 
         // Select the Cache Level in CSSELR (Cache Size Selection Register)
-        // SAFETY: Writing to `csselr_el1` is always safe, assuming the cache level exists.
-        unsafe {
-            csselr_el1::write(level << 1);
-        }
+        write_csselr_el1(CsselrEl1::new(false, level, false));
 
         // Barrier to ensure CSSELR write finishes before reading CCSIDR
         isb();
 
         // Cache Size ID Register (CCSIDR)
-        let ccsidr = ccsidr_el1::read();
+        let ccsidr = read_ccsidr_el1();
 
-        let line_power = (ccsidr & 0x7) + 4;
-        let ways = (ccsidr >> 3) & 0x3FF;
-        let sets = (ccsidr >> 13) & 0x7FFF;
+        let line_size = ccsidr.linesize();
+        let ways = (ccsidr.bits() >> 3) & 0x3FF;
+        let sets = (ccsidr.bits() >> 13) & 0x7FFF;
 
         let way_shift = (ways as u32).leading_zeros();
 
         for set in 0..=sets {
             for way in 0..=ways {
-                let dc_val = (way << way_shift) | (set << line_power) | (level << 1);
+                const LEVEL_SHIFT: u8 = 1;
+                const SET_WAY_SHIFT: u8 = 4;
+                let dc_val = (way << way_shift)
+                    | (set << (line_size + SET_WAY_SHIFT))
+                    | (u64::from(level.level()) << LEVEL_SHIFT);
 
                 // SAFETY: `dc cisw` is always safe, assuming the cache line exists.
                 unsafe {

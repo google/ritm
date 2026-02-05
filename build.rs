@@ -67,7 +67,7 @@ fn handle_payload() {
         #[allow(clippy::unreadable_literal)]
         pub const PAYLOAD_SIZE: usize = {payload_size};
         #[allow(clippy::unreadable_literal)]
-        pub const PAYLOAD_DATA: &[u8; {payload_size}] = include_bytes!(env!("RITM_PAYLOAD_PATH"));
+        pub const PAYLOAD_DATA: &[u8; PAYLOAD_SIZE] = include_bytes!(env!("RITM_PAYLOAD_PATH"));
         "#
         ),
     )
