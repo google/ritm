@@ -8,7 +8,9 @@
 
 TARGET := --target aarch64-unknown-none
 
-QEMU_BIN := target/osdemo.qemu.bin
+PAYLOAD ?= payload.bin
+
+QEMU_BIN := target/ritm.qemu.bin
 QEMU_RUSTFLAGS := "--cfg platform=\"qemu\""
 
 .PHONY: all build.qemu clean clippy qemu
@@ -16,13 +18,13 @@ QEMU_RUSTFLAGS := "--cfg platform=\"qemu\""
 all: $(QEMU_BIN)
 
 clippy:
-	RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo clippy $(TARGET)
+	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo clippy $(TARGET)
 
 build.qemu:
-	RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo build $(TARGET)
+	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo build $(TARGET)
 
 $(QEMU_BIN): build.qemu
-	RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo objcopy $(TARGET) -- -O binary $@
+	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo objcopy $(TARGET) -- -O binary $@
 
 qemu: $(QEMU_BIN)
 	qemu-system-aarch64 -machine virt,virtualization=on,gic-version=3 -cpu cortex-a57 -display none -kernel $< -s \
