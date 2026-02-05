@@ -33,11 +33,11 @@ use dtoolkit::fdt::Fdt;
 use log::{LevelFilter, info};
 use spin::mutex::{SpinMutex, SpinMutexGuard};
 
+use crate::arch::disable_mmu_and_caches;
 use crate::{
     exceptions::Exceptions,
     platform::{BootMode, Platform, PlatformImpl},
 };
-use crate::arch::disable_mmu_and_caches;
 
 const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
