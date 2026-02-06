@@ -28,6 +28,9 @@ use spin::mutex::SpinMutex;
 
 static STAGE2_MAP: Once<SpinMutex<IdMap<Stage2Attributes>>> = Once::new();
 
+const SPSR_EL1H: u8 = 5;
+const T0SZ_MAX_SIZE: u8 = 64;
+
 /// Entry point for EL1 execution.
 ///
 /// This function configures the environment for EL1 execution and then jumps to the EL1 entry point.
@@ -62,8 +65,7 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
 
     let mut spsr = read_spsr_el2();
     // Setup SPSR_EL2 to enter EL1h
-    const EL1H: u8 = 5;
-    spsr.set_m_3_0(EL1H);
+    spsr.set_m_3_0(SPSR_EL1H);
     // Mask debug, SError, IRQ, and FIQ
     spsr.insert(SpsrEl2::D);
     spsr.insert(SpsrEl2::A);
@@ -104,7 +106,6 @@ fn setup_stage2() {
     let ttbr = unsafe { idmap.activate() };
     debug!("idmap.activate() returned ttbr={ttbr:#x}");
 
-    const T0SZ_MAX_SIZE: u8 = 64;
     let mut vtcr = VtcrEl2::default();
     vtcr.set_ps(2); // 40 bit physical address size
     vtcr.set_tg0(0); // 4kB granule size
@@ -268,8 +269,7 @@ fn inject_data_abort(register_state: &mut RegisterStateRef) {
     }
     // Mask all interrupts (DAIF) and set mode to EL1h
     let mut spsr = SpsrEl1::default();
-    const EL1H: u8 = 5;
-    spsr.set_m_3_0(EL1H);
+    spsr.set_m_3_0(SPSR_EL1H);
     spsr.insert(SpsrEl1::D);
     spsr.insert(SpsrEl1::A);
     spsr.insert(SpsrEl1::I);

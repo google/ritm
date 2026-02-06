@@ -41,6 +41,10 @@ const STAGE2_MEMORY_ATTRIBUTES: Stage2Attributes = Stage2Attributes::VALID
     .union(Stage2Attributes::ACCESS_FLAG)
     .union(Stage2Attributes::SH_INNER);
 
+// Linux requires the device tree to be "placed on an 8-byte boundary":
+// https://docs.kernel.org/arch/arm64/booting.html#setup-the-device-tree
+const FDT_ALIGNMENT: usize = 8;
+
 pub struct Qemu {
     parts: Option<PlatformParts<Uart<'static>>>,
 }
@@ -113,9 +117,6 @@ impl Platform for Qemu {
         );
 
         let new_dtb = dt.to_dtb();
-        // Linux requires the device tree to be "placed on an 8-byte boundary":
-        // https://docs.kernel.org/arch/arm64/booting.html#setup-the-device-tree
-        const FDT_ALIGNMENT: usize = 8;
         let shared_dtb = crate::shared_alloc(
             Layout::from_size_align(new_dtb.len(), FDT_ALIGNMENT).expect("invalid layout"),
         );
