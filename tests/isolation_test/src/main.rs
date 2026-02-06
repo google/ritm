@@ -10,14 +10,14 @@
 #![no_main]
 
 use aarch64_rt::{ExceptionHandlers, RegisterStateRef, entry, exception_handlers};
-use arm_sysregs::read_esr_el1;
 use arm_pl011_uart::{Uart, UniqueMmioPointer};
+use arm_sysregs::read_esr_el1;
 use core::arch::asm;
-use core::fmt::{Write};
+use core::fmt::Write;
 use core::panic::PanicInfo;
 use core::ptr::NonNull;
-use spin::mutex::{SpinMutex, SpinMutexGuard};
 use spin::Once;
+use spin::mutex::{SpinMutex, SpinMutexGuard};
 
 const UART_BASE: usize = 0x0900_0000;
 const RITM_BASE: usize = 0x4000_0000;
@@ -29,8 +29,11 @@ static UART: Once<SpinMutex<Uart>> = Once::new();
 
 fn get_uart() -> SpinMutexGuard<'static, Uart<'static>> {
     UART.call_once(|| {
-        SpinMutex::new(Uart::new(unsafe { UniqueMmioPointer::new(NonNull::new(UART_BASE as *mut _).unwrap()) }))
-    }).lock()
+        SpinMutex::new(Uart::new(unsafe {
+            UniqueMmioPointer::new(NonNull::new(UART_BASE as *mut _).unwrap())
+        }))
+    })
+    .lock()
 }
 
 fn main(_arg0: u64, _arg1: u64, _arg2: u64, _arg3: u64) -> ! {

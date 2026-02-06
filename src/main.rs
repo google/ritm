@@ -45,7 +45,8 @@ const LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 const HEAP_SIZE: usize = 40 * PAGE_SIZE;
 static HEAP: SpinMutex<[u8; HEAP_SIZE]> = SpinMutex::new([0; HEAP_SIZE]);
 
-static SHARED_HEAP: SpinMutex<[u8; PlatformImpl::SHARED_HEAP_SIZE]> = SpinMutex::new([0; PlatformImpl::SHARED_HEAP_SIZE]);
+static SHARED_HEAP: SpinMutex<[u8; PlatformImpl::SHARED_HEAP_SIZE]> =
+    SpinMutex::new([0; PlatformImpl::SHARED_HEAP_SIZE]);
 
 #[global_allocator]
 static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();

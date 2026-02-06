@@ -116,8 +116,9 @@ impl Platform for Qemu {
         // Linux requires the device tree to be "placed on an 8-byte boundary":
         // https://docs.kernel.org/arch/arm64/booting.html#setup-the-device-tree
         const FDT_ALIGNMENT: usize = 8;
-        let shared_dtb =
-            crate::shared_alloc(Layout::from_size_align(new_dtb.len(), FDT_ALIGNMENT).expect("invalid layout"));
+        let shared_dtb = crate::shared_alloc(
+            Layout::from_size_align(new_dtb.len(), FDT_ALIGNMENT).expect("invalid layout"),
+        );
         shared_dtb.copy_from_slice(&new_dtb);
 
         let fdt_address = shared_dtb.as_ptr();

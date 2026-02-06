@@ -6,7 +6,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use core::arch::naked_asm;
+use crate::{
+    arch,
+    arch::{esr, far},
+    platform::{Platform, PlatformImpl},
+    simple_map::SimpleMap,
+};
 use aarch64_paging::descriptor::Stage2Attributes;
 use aarch64_paging::idmap::IdMap;
 use aarch64_rt::{RegisterStateRef, Stack, SuspendContext, warm_boot_entry};
@@ -16,15 +21,10 @@ use arm_sysregs::{
     write_cnthctl_el2, write_cntvoff_el2, write_elr_el1, write_elr_el2, write_esr_el1,
     write_far_el1, write_hcr_el2, write_spsr_el1, write_spsr_el2, write_vtcr_el2,
 };
+use core::arch::naked_asm;
 use log::debug;
-use spin::mutex::SpinMutex;
 use spin::Once;
-use crate::{
-    arch,
-    arch::{esr, far},
-    platform::{Platform, PlatformImpl},
-    simple_map::SimpleMap,
-};
+use spin::mutex::SpinMutex;
 
 static STAGE2_MAP: Once<SpinMutex<IdMap<Stage2Attributes>>> = Once::new();
 
@@ -92,18 +92,16 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
 
 fn setup_stage2() {
     debug!("Setting up stage 2 page table");
-    let mut idmap = STAGE2_MAP.call_once(|| {
-        SpinMutex::new(PlatformImpl::make_stage2_pagetable())
-    }).lock();
+    let mut idmap = STAGE2_MAP
+        .call_once(|| SpinMutex::new(PlatformImpl::make_stage2_pagetable()))
+        .lock();
 
     let root_pa = idmap.root_address().0;
     debug!("Root PA: {root_pa:#x}");
 
     // Activate the page table
     // SAFETY: We are initializing the Stage 2 translation. The guest is not running yet.
-    let ttbr = unsafe {
-        idmap.activate()
-    };
+    let ttbr = unsafe { idmap.activate() };
     debug!("idmap.activate() returned ttbr={ttbr:#x}");
 
     const T0SZ_MAX_SIZE: u8 = 64;
