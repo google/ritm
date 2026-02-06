@@ -27,6 +27,7 @@ mod payload_constants {
 use aarch64_paging::paging::PAGE_SIZE;
 use aarch64_rt::{entry, exception_handlers};
 use buddy_system_allocator::{Heap, LockedHeap};
+use core::alloc::Layout;
 use core::arch::naked_asm;
 use core::ops::DerefMut;
 use dtoolkit::fdt::Fdt;
@@ -39,13 +40,12 @@ use crate::{
     platform::{BootMode, Platform, PlatformImpl},
 };
 
-const LOG_LEVEL: LevelFilter = LevelFilter::Info;
+const LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 
 const HEAP_SIZE: usize = 40 * PAGE_SIZE;
 static HEAP: SpinMutex<[u8; HEAP_SIZE]> = SpinMutex::new([0; HEAP_SIZE]);
 
-const SHARED_HEAP_SIZE: usize = 16 * PAGE_SIZE;
-static SHARED_HEAP: SpinMutex<[u8; SHARED_HEAP_SIZE]> = SpinMutex::new([0; SHARED_HEAP_SIZE]);
+static SHARED_HEAP: SpinMutex<[u8; PlatformImpl::SHARED_HEAP_SIZE]> = SpinMutex::new([0; PlatformImpl::SHARED_HEAP_SIZE]);
 
 #[global_allocator]
 static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
@@ -157,13 +157,11 @@ unsafe fn run_payload_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
 /// # Panics
 ///
 /// Panics if the requested size is invalid or if the allocation fails.
-pub fn shared_alloc(size: usize) -> &'static mut [u8] {
-    use core::alloc::Layout;
-    let layout = Layout::from_size_align(size, PAGE_SIZE).expect("invalid layout");
+pub fn shared_alloc(layout: Layout) -> &'static mut [u8] {
     let ptr = SHARED_HEAP_ALLOCATOR
         .lock()
         .alloc(layout)
         .expect("failed to allocate from shared heap");
     // SAFETY: The pointer is valid and represents the requested size.
-    unsafe { core::slice::from_raw_parts_mut(ptr.as_ptr(), size) }
+    unsafe { core::slice::from_raw_parts_mut(ptr.as_ptr(), layout.size()) }
 }

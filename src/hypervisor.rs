@@ -6,20 +6,27 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use alloc::boxed::Box;
 use core::arch::naked_asm;
-
+use aarch64_paging::descriptor::Stage2Attributes;
+use aarch64_paging::idmap::IdMap;
 use aarch64_rt::{RegisterStateRef, Stack, SuspendContext, warm_boot_entry};
-use arm_sysregs::{CnthctlEl2, CntvoffEl2, ElrEl2, EsrEl2, HcrEl2, MpidrEl1, SpsrEl2, read_cnthctl_el2, read_hcr_el2, read_mpidr_el1, read_spsr_el2, write_cnthctl_el2, write_cntvoff_el2, write_elr_el2, write_hcr_el2, write_spsr_el2, VtcrEl2, write_vtcr_el2};
+use arm_sysregs::{
+    CnthctlEl2, CntvoffEl2, ElrEl1, ElrEl2, EsrEl1, EsrEl2, FarEl1, HcrEl2, MpidrEl1, SpsrEl1,
+    SpsrEl2, VtcrEl2, read_cnthctl_el2, read_hcr_el2, read_mpidr_el1, read_spsr_el2, read_vbar_el1,
+    write_cnthctl_el2, write_cntvoff_el2, write_elr_el1, write_elr_el2, write_esr_el1,
+    write_far_el1, write_hcr_el2, write_spsr_el1, write_spsr_el2, write_vtcr_el2,
+};
 use log::debug;
 use spin::mutex::SpinMutex;
-
+use spin::Once;
 use crate::{
     arch,
     arch::{esr, far},
     platform::{Platform, PlatformImpl},
     simple_map::SimpleMap,
 };
+
+static STAGE2_MAP: Once<SpinMutex<IdMap<Stage2Attributes>>> = Once::new();
 
 /// Entry point for EL1 execution.
 ///
@@ -85,35 +92,38 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
 
 fn setup_stage2() {
     debug!("Setting up stage 2 page table");
-    let idmap = Box::new(PlatformImpl::make_stage2_pagetable());
+    let mut idmap = STAGE2_MAP.call_once(|| {
+        SpinMutex::new(PlatformImpl::make_stage2_pagetable())
+    }).lock();
 
     let root_pa = idmap.root_address().0;
     debug!("Root PA: {root_pa:#x}");
-    let idmap = Box::leak(idmap);
 
     // Activate the page table
     // SAFETY: We are initializing the Stage 2 translation. The guest is not running yet.
+    let ttbr = unsafe {
+        idmap.activate()
+    };
+    debug!("idmap.activate() returned ttbr={ttbr:#x}");
+
+    const T0SZ_MAX_SIZE: u8 = 64;
+    let mut vtcr = VtcrEl2::default();
+    vtcr.set_ps(2); // 40 bit physical address size
+    vtcr.set_tg0(0); // 4kB granule size
+    vtcr.set_sh0(3); // Inner shareable memory
+    vtcr.set_orgn0(1); // Outer Write-Back Read-Allocate Write-Allocate Cacheable
+    vtcr.set_irgn0(1); // Inner Write-Back Read-Allocate Write-Allocate Cacheable
+    vtcr.set_sl0(2); // L0 starting level
+    vtcr.set_t0sz(T0SZ_MAX_SIZE - 40); // 40 bit size offset
+    debug!("Writing VTCR_EL2={vtcr:#x}...");
+    // SAFETY: We are initializing the Stage 2 translation. The guest is not running yet.
     unsafe {
-        let ttbr = idmap.activate();
-        debug!("idmap.activate() returned ttbr={ttbr:#x}");
-
-        const T0SZ_MAX_SIZE: u8 = 64;
-        let mut vtcr = VtcrEl2::default();
-        vtcr.set_ps(2); // 40 bit physical address size
-        vtcr.set_tg0(0); // 4kB granule size
-        vtcr.set_sh0(3); // Inner shareable memory
-        vtcr.set_orgn0(1); // Outer Write-Back Read-Allocate Write-Allocate Cacheable
-        vtcr.set_irgn0(1); // Inner Write-Back Read-Allocate Write-Allocate Cacheable
-        vtcr.set_sl0(2); // L0 starting level
-        vtcr.set_t0sz(T0SZ_MAX_SIZE - 40); // 40 bit size offset
-        debug!("Writing VTCR_EL2={vtcr:#x}...");
         write_vtcr_el2(vtcr);
-
-        arch::tlbi_vmalls12e1();
-        arch::dsb();
-        arch::isb();
-        debug!("Stage 2 activation complete.");
     }
+    arch::tlbi_vmalls12e1();
+    arch::dsb();
+    arch::isb();
+    debug!("Stage 2 activation complete.");
 }
 
 /// Returns to EL1.
@@ -213,14 +223,14 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
                 }
             }
         }
+        ExceptionClass::DataAbortLowerEL => {
+            inject_data_abort(&mut register_state);
+        }
         ExceptionClass::Unknown(val) => {
             panic!(
                 "Unexpected sync_lower, esr={esr:#x}, ec={val:#x}, far={:#x}, register_state={register_state:?}",
                 far(),
             );
-        }
-        ExceptionClass::DataAbortLowerEL => {
-            inject_data_abort(&mut register_state);
         }
     }
 }
@@ -229,14 +239,14 @@ fn inject_data_abort(register_state: &mut RegisterStateRef) {
     // SAFETY: We are modifying the saved register state to redirect execution.
     let regs = unsafe { register_state.get_mut() };
     let fault_addr = far();
-    let syndrome = esr();
+    let esr = esr();
 
-    debug!("Injecting data abort to guest: fault_addr={fault_addr:#x}, syndrome={syndrome:#x}");
+    debug!("Injecting data abort to guest: fault_addr={fault_addr:#x}, esr={esr:#x}");
 
     // Read guest VBAR
-    let vbar = arch::vbar_el1::read();
-    assert!(
-        vbar != 0,
+    let vbar = read_vbar_el1().bits();
+    assert_ne!(
+        vbar, 0,
         "Guest VBAR_EL1 is 0, cannot inject data abort. Fault addr: {fault_addr:#x}"
     );
     let handler = vbar + 0x200; // Current EL with SPx Sync
@@ -244,11 +254,11 @@ fn inject_data_abort(register_state: &mut RegisterStateRef) {
     // Save current context to guest EL1 regs
     // SAFETY: We are accessing EL1 system registers to inject exception.
     unsafe {
-        arch::elr_el1::write(regs.elr as u64);
-        arch::spsr_el1::write(regs.spsr);
-        arch::esr_el1::write(syndrome);
-        arch::far_el1::write(fault_addr);
+        write_elr_el1(ElrEl1::from_bits_retain(regs.elr as u64));
+        write_spsr_el1(SpsrEl1::from_bits_retain(regs.spsr));
+        write_far_el1(FarEl1::from_bits_retain(fault_addr));
     }
+    write_esr_el1(EsrEl1::from_bits_retain(esr));
 
     // Redirect execution
     #[expect(
@@ -258,8 +268,15 @@ fn inject_data_abort(register_state: &mut RegisterStateRef) {
     {
         regs.elr = handler as usize;
     }
-    // Mask all interrupts (DAIF) and set mode to EL1h (0x5)
-    regs.spsr = 0x3C5;
+    // Mask all interrupts (DAIF) and set mode to EL1h
+    let mut spsr = SpsrEl1::default();
+    const EL1H: u8 = 5;
+    spsr.set_m_3_0(EL1H);
+    spsr.insert(SpsrEl1::D);
+    spsr.insert(SpsrEl1::A);
+    spsr.insert(SpsrEl1::I);
+    spsr.insert(SpsrEl1::F);
+    regs.spsr = spsr.bits();
 }
 
 const AARCH64_INSTRUCTION_LENGTH: usize = 4;

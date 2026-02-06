@@ -132,6 +132,9 @@ version = "0.1.0"
 dependencies = [
  "aarch64-rt",
  "arm-pl011-uart",
+ "arm-sysregs",
+ "smccc",
+ "spin",
 ]
 
 [[package]]
