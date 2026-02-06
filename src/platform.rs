@@ -9,6 +9,9 @@
 #[cfg(platform = "qemu")]
 mod qemu;
 
+use aarch64_paging::descriptor::Stage2Attributes;
+use aarch64_paging::idmap::IdMap;
+use aarch64_paging::paging::PAGE_SIZE;
 use dtoolkit::fdt::Fdt;
 use embedded_io::{Write, WriteReady};
 #[cfg(platform = "qemu")]
@@ -22,6 +25,10 @@ pub trait Platform {
 
     /// The maximum number of cores supported by the platform.
     const MAX_CORES: usize;
+
+    /// The size of the heap shared between the host and the guest (e.g. to provide
+    /// the modified DTB).
+    const SHARED_HEAP_SIZE: usize = 16 * PAGE_SIZE;
 
     /// Creates an instance of the platform.
     ///
@@ -45,6 +52,12 @@ pub trait Platform {
     fn modify_dt(&self, fdt: Fdt<'static>) -> Fdt<'static> {
         fdt
     }
+
+    /// Create stage-2 page table for use by the guest for use when booting the payload at EL1.
+    ///
+    /// The page table should typically unmap the part of the memory where RITM resides, so that
+    /// the guest cannot interact with it in any way.
+    fn make_stage2_pagetable() -> IdMap<Stage2Attributes>;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
