@@ -9,19 +9,16 @@
 use core::arch::naked_asm;
 
 use aarch64_rt::{RegisterStateRef, Stack};
-use arm_sysregs::{
-    CnthctlEl2, CntvoffEl2, ElrEl2, EsrEl2, HcrEl2, MpidrEl1, SpsrEl2, read_cnthctl_el2,
-    read_hcr_el2, read_mpidr_el1, read_spsr_el2, write_cnthctl_el2, write_cntvoff_el2,
-    write_elr_el2, write_hcr_el2, write_spsr_el2,
-};
+use arm_sysregs::{CnthctlEl2, CntvoffEl2, ElrEl2, HcrEl2, MpidrEl1, SpsrEl2, read_cnthctl_el2, read_hcr_el2, read_mpidr_el1, read_spsr_el2, write_cnthctl_el2, write_cntvoff_el2, write_elr_el2, write_hcr_el2, write_spsr_el2, read_esr_el2, read_far_el2};
 use log::debug;
 use spin::mutex::SpinMutex;
 
 use crate::{
-    arch::{esr, far},
     platform::{Platform, PlatformImpl},
     simple_map::SimpleMap,
 };
+
+const SPSR_EL1H: u8 = 5;
 
 /// Entry point for EL1 execution.
 ///
@@ -36,9 +33,10 @@ use crate::{
 pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_point: u64) -> ! {
     // Setup EL1
     let mut hcr = read_hcr_el2();
-    hcr.insert(HcrEl2::RW);
-    hcr.insert(HcrEl2::TSC);
-    hcr.remove(HcrEl2::IMO);
+    hcr |= HcrEl2::RW;
+    hcr |= HcrEl2::TSC;
+    hcr |= HcrEl2::VM;
+    hcr -= HcrEl2::IMO;
     // SAFETY: We are configuring HCR_EL2 to allow EL1 execution.
     unsafe {
         write_hcr_el2(hcr);
@@ -49,19 +47,18 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
 
     // Allow access to timers
     let mut cnthctl = read_cnthctl_el2();
-    cnthctl.insert(CnthctlEl2::EL0PCTEN);
-    cnthctl.insert(CnthctlEl2::EL1PCEN);
+    cnthctl |= CnthctlEl2::EL0PCTEN;
+    cnthctl |= CnthctlEl2::EL1PCEN;
     write_cnthctl_el2(cnthctl);
 
     let mut spsr = read_spsr_el2();
     // Setup SPSR_EL2 to enter EL1h
-    const EL1H: u8 = 5;
-    spsr.set_m_3_0(EL1H);
+    spsr.set_m_3_0(SPSR_EL1H);
     // Mask debug, SError, IRQ, and FIQ
-    spsr.insert(SpsrEl2::D);
-    spsr.insert(SpsrEl2::A);
-    spsr.insert(SpsrEl2::I);
-    spsr.insert(SpsrEl2::F);
+    spsr |= SpsrEl2::D;
+    spsr |= SpsrEl2::A;
+    spsr |= SpsrEl2::I;
+    spsr |= SpsrEl2::F;
     // SAFETY: Configuring SPSR_EL2 for the return to EL1.
     unsafe {
         write_spsr_el2(spsr);
@@ -162,9 +159,8 @@ pub unsafe extern "C" fn eret_to_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
 }
 
 pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
-    let esr = esr();
-    let esr_el2 = EsrEl2::from_bits_retain(esr);
-    let ec = ExceptionClass::new(esr_el2.ec());
+    let esr_el2 = read_esr_el2();
+    let ec = ExceptionClass::from(esr_el2.ec());
 
     match ec {
         ExceptionClass::HvcTrappedInAArch64 | ExceptionClass::SmcTrappedInAArch64 => {
@@ -182,9 +178,8 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
         }
         ExceptionClass::Unknown(_) => {
             panic!(
-                "Unexpected sync_lower, esr={:#x}, far={:#x}, register_state={register_state:?}",
-                esr,
-                far(),
+                "Unexpected sync_lower, esr={esr_el2:#x}, far={:#x}, register_state={register_state:?}",
+                read_far_el2(),
             );
         }
     }
@@ -261,11 +256,11 @@ fn handle_psci(fn_id: u64, arg0: u64, arg1: u64, arg2: u64) -> Result<u64, arm_p
         }
         CpuOn { target_cpu, entry } => {
             let result = psci_cpu_on(fn_id, target_cpu, entry);
-            Ok(u64::from(i32::from(result).cast_unsigned()))
+            Ok(psci_result_to_u64(result))
         }
         CpuSuspend { state, entry } => {
             let result = psci_cpu_suspend(state, entry);
-            Ok(result)
+            Ok(psci_result_to_u64(result))
         }
     }
 }
@@ -274,7 +269,7 @@ fn psci_cpu_on(
     fn_id: u64,
     mpidr: arm_psci::Mpidr,
     entry: arm_psci::EntryPoint,
-) -> arm_psci::ReturnCode {
+) -> Result<(), smccc::psci::Error> {
     let mpidr_u64 = mpidr.into();
     let mpidr = MpidrEl1::from_bits_retain(mpidr_u64);
     let stack = get_secondary_stack(mpidr);
@@ -284,16 +279,19 @@ fn psci_cpu_on(
         aarch64_rt::start_core::<smccc::Smc, _, _>(mpidr_u64, stack, move || {
             let entry_ptr = entry.entry_point_address();
             let arg = entry.context_id();
-            debug!("Started core with fn_id={fn_id:#x}, mpidr={mpidr:#x}, entry_ptr={entry_ptr:#x}, arg={arg}");
+            debug!(
+                "Started core with fn_id={fn_id:#x}, mpidr={mpidr:#x}, entry_ptr={entry_ptr:#x}, arg={arg}"
+            );
 
             entry_point_el1(arg, 0, 0, 0, entry_ptr);
-        }).expect("Failed to start core");
+        })
     }
-
-    arm_psci::ReturnCode::Success
 }
 
-fn psci_cpu_suspend(power_state: arm_psci::PowerState, entry: arm_psci::EntryPoint) -> u64 {
+fn psci_cpu_suspend(
+    power_state: arm_psci::PowerState,
+    entry: arm_psci::EntryPoint,
+) -> Result<(), smccc::psci::Error> {
     let mpidr = read_mpidr_el1();
 
     let context = SuspendCoreData {
@@ -307,6 +305,7 @@ fn psci_cpu_suspend(power_state: arm_psci::PowerState, entry: arm_psci::EntryPoi
     let result = unsafe {
         aarch64_rt::suspend_core::<smccc::Smc, ()>(
             power_state.into(),
+            // The stack grows downwards on aarch64, so get a pointer to the end of the stack.
             get_secondary_stack(mpidr).wrapping_add(1) as usize as *mut u64,
             restore_from_suspend,
             0,
@@ -316,6 +315,10 @@ fn psci_cpu_suspend(power_state: arm_psci::PowerState, entry: arm_psci::EntryPoi
     // If we return here, suspend failed or was not a power down.
     SUSPEND_CONTEXTS.lock().remove(&mpidr);
 
+    result
+}
+
+fn psci_result_to_u64(result: Result<(), smccc::psci::Error>) -> u64 {
     match result {
         Ok(()) => u64::from(i32::from(arm_psci::ReturnCode::Success).cast_unsigned()),
         Err(err) => i64::from(err).cast_unsigned(),
@@ -368,8 +371,8 @@ enum ExceptionClass {
     Unknown(u8),
 }
 
-impl ExceptionClass {
-    fn new(value: u8) -> Self {
+impl From<u8> for ExceptionClass {
+    fn from(value: u8) -> Self {
         match value {
             0x16 => Self::HvcTrappedInAArch64,
             0x17 => Self::SmcTrappedInAArch64,

@@ -11,24 +11,6 @@
 use arm_sysregs::{SctlrEl2, read_sctlr_el2};
 use core::arch::naked_asm;
 
-pub fn esr() -> u64 {
-    let mut esr: u64;
-    // SAFETY: Reading esr is always safe.
-    unsafe {
-        asm!("mrs {esr}, esr_el2", esr = out(reg) esr);
-    }
-    esr
-}
-
-pub fn far() -> u64 {
-    let mut far: u64;
-    // SAFETY: Reading far is always safe.
-    unsafe {
-        asm!("mrs {far}, far_el2", far = out(reg) far);
-    }
-    far
-}
-
 /// Disables MMU and caches.
 ///
 /// # Safety
