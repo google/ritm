@@ -9,7 +9,11 @@
 use core::arch::naked_asm;
 
 use aarch64_rt::{RegisterStateRef, Stack};
-use arm_sysregs::{CnthctlEl2, CntvoffEl2, ElrEl2, HcrEl2, MpidrEl1, SpsrEl2, read_cnthctl_el2, read_hcr_el2, read_mpidr_el1, read_spsr_el2, write_cnthctl_el2, write_cntvoff_el2, write_elr_el2, write_hcr_el2, write_spsr_el2, read_esr_el2, read_far_el2};
+use arm_sysregs::{
+    CnthctlEl2, CntvoffEl2, ElrEl2, HcrEl2, MpidrEl1, SpsrEl2, read_cnthctl_el2, read_esr_el2,
+    read_far_el2, read_hcr_el2, read_mpidr_el1, read_spsr_el2, write_cnthctl_el2,
+    write_cntvoff_el2, write_elr_el2, write_hcr_el2, write_spsr_el2,
+};
 use log::debug;
 use spin::mutex::SpinMutex;
 
