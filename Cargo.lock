@@ -14,7 +14,7 @@ dependencies = [
 [[package]]
 name = "aarch64-rt"
 version = "0.4.2"
-source = "git+https://github.com/m4tx/aarch64-rt.git?rev=b5783edd5e5d5555105946c462646572d3454d99#b5783edd5e5d5555105946c462646572d3454d99"
+source = "git+https://github.com/m4tx/aarch64-rt.git?rev=4b70c951fa2263ca00bcd029dfc7b68ec74f69e7#4b70c951fa2263ca00bcd029dfc7b68ec74f69e7"
 dependencies = [
  "smccc",
 ]
