@@ -13,8 +13,14 @@ use crate::{
 };
 use aarch64_paging::descriptor::Stage2Attributes;
 use aarch64_paging::idmap::IdMap;
-use aarch64_rt::{RegisterStateRef, Stack, SuspendContext, warm_boot_entry};
-use arm_sysregs::{CnthctlEl2, CntvoffEl2, ElrEl1, ElrEl2, EsrEl1, EsrEl2, FarEl1, HcrEl2, MpidrEl1, SpsrEl1, SpsrEl2, VtcrEl2, read_cnthctl_el2, read_hcr_el2, read_mpidr_el1, read_spsr_el2, read_vbar_el1, write_cnthctl_el2, write_cntvoff_el2, write_elr_el1, write_elr_el2, write_esr_el1, write_far_el1, write_hcr_el2, write_spsr_el1, write_spsr_el2, write_vtcr_el2, read_far_el2, read_esr_el2};
+use aarch64_rt::{RegisterStateRef, Stack};
+use arm_sysregs::{
+    CnthctlEl2, CntvoffEl2, ElrEl1, ElrEl2, EsrEl1, FarEl1, HcrEl2, MpidrEl1, SpsrEl1, SpsrEl2,
+    VtcrEl2, read_cnthctl_el2, read_esr_el2, read_far_el2, read_hcr_el2, read_mpidr_el1,
+    read_spsr_el2, read_vbar_el1, write_cnthctl_el2, write_cntvoff_el2, write_elr_el1,
+    write_elr_el2, write_esr_el1, write_far_el1, write_hcr_el2, write_spsr_el1, write_spsr_el2,
+    write_vtcr_el2,
+};
 use core::arch::naked_asm;
 use log::debug;
 use spin::Once;
@@ -220,7 +226,7 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
         }
         ExceptionClass::Unknown(val) => {
             panic!(
-                "Unexpected sync_lower, esr={esr:#x}, ec={val:#x}, far={:#x}, register_state={register_state:?}",
+                "Unexpected sync_lower, esr={esr_el2:#x}, ec={val:#x}, far={:#x}, register_state={register_state:?}",
                 read_far_el2(),
             );
         }
