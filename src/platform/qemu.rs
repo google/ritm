@@ -36,7 +36,8 @@ const STAGE2_DEVICE_ATTRIBUTES: Stage2Attributes = Stage2Attributes::VALID
     .union(Stage2Attributes::ACCESS_FLAG)
     .union(Stage2Attributes::SH_NONE);
 const STAGE2_MEMORY_ATTRIBUTES: Stage2Attributes = Stage2Attributes::VALID
-    .union(Stage2Attributes::MEMATTR_NORMAL)
+    .union(Stage2Attributes::MEMATTR_NORMAL_OUTER_WB)
+    .union(Stage2Attributes::MEMATTR_NORMAL_INNER_WB)
     .union(Stage2Attributes::S2AP_ACCESS_RW)
     .union(Stage2Attributes::ACCESS_FLAG)
     .union(Stage2Attributes::SH_INNER);
