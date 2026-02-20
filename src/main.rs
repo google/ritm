@@ -77,7 +77,6 @@ fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     let fdt_address = x0 as *const u8;
     // SAFETY: We trust that the FDT pointer we were given is valid, and this is the only time we
     // use it.
-    // SAFETY: fdt_address is a valid pointer to a device tree.
     let fdt: Fdt<'_> =
         unsafe { Fdt::from_raw(fdt_address).expect("fdt_address is not a valid fdt") };
 

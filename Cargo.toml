@@ -26,7 +26,6 @@ spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-fe
 
 [patch.crates-io]
 aarch64-rt = { git = "https://github.com/m4tx/aarch64-rt.git", rev = "4b70c951fa2263ca00bcd029dfc7b68ec74f69e7" }
-aarch64-paging = { git = "https://github.com/m4tx/aarch64-paging.git", rev = "6e28cdee945701821b7b5721b500e8e93f1a99b5" }
 
 [lints.rust]
 deprecated-safe = "warn"
