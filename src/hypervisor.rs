@@ -8,7 +8,7 @@
 
 use core::arch::naked_asm;
 
-use aarch64_rt::{RegisterStateRef, Stack, SuspendContext, warm_boot_entry};
+use aarch64_rt::{RegisterStateRef, Stack};
 use arm_sysregs::{
     CnthctlEl2, CntvoffEl2, ElrEl2, EsrEl2, HcrEl2, MpidrEl1, SpsrEl2, read_cnthctl_el2,
     read_hcr_el2, read_mpidr_el1, read_spsr_el2, write_cnthctl_el2, write_cntvoff_el2,
@@ -295,24 +295,25 @@ fn psci_cpu_on(
 
 fn psci_cpu_suspend(power_state: arm_psci::PowerState, entry: arm_psci::EntryPoint) -> u64 {
     let mpidr = read_mpidr_el1();
-    let context = SuspendContext {
-        stack_ptr: get_secondary_stack(mpidr).wrapping_add(1) as usize as u64,
-        entry: restore_from_suspend,
-        data: SuspendCoreData {
-            entry_point: entry.entry_point_address(),
-            context_id: entry.context_id(),
-        },
+
+    let context = SuspendCoreData {
+        entry_point: entry.entry_point_address(),
+        context_id: entry.context_id(),
+    };
+    SUSPEND_CONTEXTS.lock().insert(mpidr, context);
+
+    // SAFETY: We treat CPU_SUSPEND as CPU_ON, resetting the stack pointer to the bottom of the stack
+    // and not assuming anything is there.
+    let result = unsafe {
+        aarch64_rt::suspend_core::<smccc::Smc, ()>(
+            power_state.into(),
+            get_secondary_stack(mpidr).wrapping_add(1) as usize as *mut u64,
+            restore_from_suspend,
+            0,
+        )
     };
 
-    let context_ptr = core::ptr::from_mut(SUSPEND_CONTEXTS.lock().insert(mpidr, context));
-
-    let result = smccc::psci::cpu_suspend::<smccc::Smc>(
-        power_state.into(),
-        warm_boot_entry::<SuspendCoreData> as usize as u64,
-        context_ptr as u64,
-    );
-
-    // If we return here, the suspend failed or was not a power down.
+    // If we return here, suspend failed or was not a power down.
     SUSPEND_CONTEXTS.lock().remove(&mpidr);
 
     match result {
@@ -333,7 +334,7 @@ struct SuspendCoreData {
 ///
 /// The caller must ensure the entry pointer and `context_id` for given mpidr saved in
 /// [`SUSPEND_CONTEXTS`] is valid.
-extern "C" fn restore_from_suspend(_context: &mut SuspendContext<SuspendCoreData>) -> ! {
+extern "C" fn restore_from_suspend(_data: u64) -> ! {
     let mpidr = read_mpidr_el1();
     let context = SUSPEND_CONTEXTS
         .lock()
@@ -341,20 +342,19 @@ extern "C" fn restore_from_suspend(_context: &mut SuspendContext<SuspendCoreData
         .expect("context not found for resuming CPU");
     debug!(
         "Restoring from suspend: entry={:#x}, ctx={:#x}",
-        context.data.entry_point, context.data.context_id
+        context.entry_point, context.context_id
     );
 
     // SAFETY: We are restoring the execution of the guest, assuming the entry point and
     // context_id we saved earlier from the guest is valid.
     unsafe {
-        entry_point_el1(context.data.context_id, 0, 0, 0, context.data.entry_point);
+        entry_point_el1(context.context_id, 0, 0, 0, context.entry_point);
     }
 }
 
 const MAX_CORES: usize = <PlatformImpl as Platform>::MAX_CORES;
-static SUSPEND_CONTEXTS: SpinMutex<
-    SimpleMap<MpidrEl1, SuspendContext<SuspendCoreData>, MAX_CORES>,
-> = SpinMutex::new(SimpleMap::new());
+static SUSPEND_CONTEXTS: SpinMutex<SimpleMap<MpidrEl1, SuspendCoreData, MAX_CORES>> =
+    SpinMutex::new(SimpleMap::new());
 
 /// The class of an exception.
 #[derive(Debug)]
