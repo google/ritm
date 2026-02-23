@@ -208,7 +208,6 @@ dependencies = [
  "embedded-io",
  "log",
  "percore",
- "safe-mmio",
  "smccc",
  "spin",
 ]
