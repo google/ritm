@@ -7,11 +7,8 @@
 // except according to those terms.
 
 /// The QEMU aarch64 virt platform.
-use super::{Platform, PlatformParts};
-use crate::{
-    pagetable::{DEVICE_ATTRIBUTES, MEMORY_ATTRIBUTES},
-    platform::BootMode,
-};
+use super::{Platform, PlatformParts, FDT_ALIGNMENT};
+use crate::{pagetable::{DEVICE_ATTRIBUTES, MEMORY_ATTRIBUTES}, platform::BootMode};
 use aarch64_paging::descriptor::Stage2Attributes;
 use aarch64_paging::idmap::IdMap;
 use aarch64_paging::paging::{MemoryRegion, TranslationRegime};
@@ -24,27 +21,12 @@ use dtoolkit::{
     fdt::Fdt,
     model::{DeviceTree, DeviceTreeNode, DeviceTreeProperty},
 };
+use crate::pagetable::{STAGE2_DEVICE_ATTRIBUTES, STAGE2_MEMORY_ATTRIBUTES};
 
 /// Base address of the first PL011 UART.
 const UART_BASE_ADDRESS: *mut PL011Registers = 0x900_0000 as _;
 
 const RITM_END: usize = 0x4040_0000;
-
-const STAGE2_DEVICE_ATTRIBUTES: Stage2Attributes = Stage2Attributes::VALID
-    .union(Stage2Attributes::MEMATTR_DEVICE_nGnRnE)
-    .union(Stage2Attributes::S2AP_ACCESS_RW)
-    .union(Stage2Attributes::ACCESS_FLAG)
-    .union(Stage2Attributes::SH_NONE);
-const STAGE2_MEMORY_ATTRIBUTES: Stage2Attributes = Stage2Attributes::VALID
-    .union(Stage2Attributes::MEMATTR_NORMAL_OUTER_WB)
-    .union(Stage2Attributes::MEMATTR_NORMAL_INNER_WB)
-    .union(Stage2Attributes::S2AP_ACCESS_RW)
-    .union(Stage2Attributes::ACCESS_FLAG)
-    .union(Stage2Attributes::SH_INNER);
-
-// Linux requires the device tree to be "placed on an 8-byte boundary":
-// https://docs.kernel.org/arch/arm64/booting.html#setup-the-device-tree
-const FDT_ALIGNMENT: usize = 8;
 
 pub struct Qemu {
     parts: Option<PlatformParts<Uart<'static>>>,

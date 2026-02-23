@@ -19,6 +19,12 @@ pub use qemu::Qemu as PlatformImpl;
 
 pub type ConsoleImpl = <PlatformImpl as Platform>::Console;
 
+/// Default alignment for the modified FDT blob.
+///
+/// This is 8 bytes, as Linux requires the device tree to be "placed on an 8-byte boundary":
+/// https://docs.kernel.org/arch/arm64/booting.html#setup-the-device-tree
+pub const FDT_ALIGNMENT: usize = 8;
+
 /// Platform-specific code.
 pub trait Platform {
     type Console: Send + Write + WriteReady;
