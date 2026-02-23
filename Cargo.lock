@@ -14,8 +14,9 @@ dependencies = [
 
 [[package]]
 name = "aarch64-rt"
-version = "0.4.2"
-source = "git+https://github.com/m4tx/aarch64-rt.git?rev=4b70c951fa2263ca00bcd029dfc7b68ec74f69e7#4b70c951fa2263ca00bcd029dfc7b68ec74f69e7"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c11ec2f9c11149816e7f9461f894b04dec5be5b8d87fedb0884b1c60f9dba00c"
 dependencies = [
  "smccc",
 ]

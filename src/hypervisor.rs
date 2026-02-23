@@ -307,7 +307,7 @@ fn psci_cpu_suspend(
     // SAFETY: We treat CPU_SUSPEND as CPU_ON, resetting the stack pointer to the bottom of the stack
     // and not assuming anything is there.
     let result = unsafe {
-        aarch64_rt::suspend_core::<smccc::Smc, ()>(
+        aarch64_rt::suspend_core::<smccc::Smc>(
             power_state.into(),
             // The stack grows downwards on aarch64, so get a pointer to the end of the stack.
             get_secondary_stack(mpidr).wrapping_add(1) as usize as *mut u64,
