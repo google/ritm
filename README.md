@@ -30,6 +30,18 @@ This reference implementation is intended for **System on a Chip (SOC) vendors**
 and **Original Equipment Manufacturers (OEMs)** to incorporate into the
 bootloader flow of their devices.
 
+## Building
+
+To build the project for QEMU, you need to provide the path to the kernel
+image payload (e.g., a Linux kernel `Image`).
+
+```bash
+make build.qemu PAYLOAD=/path/to/your/linux/Image
+```
+
+If you do not specify `PAYLOAD`, it defaults to looking for a file named
+`payload.bin` in the root directory.
+
 ## License
 
 This software is distributed under the terms of both the MIT license and the
