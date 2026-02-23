@@ -39,7 +39,6 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
     let mut hcr = read_hcr_el2();
     hcr |= HcrEl2::RW;
     hcr |= HcrEl2::TSC;
-    hcr |= HcrEl2::VM;
     hcr -= HcrEl2::IMO;
     // SAFETY: We are configuring HCR_EL2 to allow EL1 execution.
     unsafe {
