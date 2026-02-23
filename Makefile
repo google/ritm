@@ -18,7 +18,10 @@ QEMU_RUSTFLAGS := "--cfg platform=\"qemu\""
 all: $(QEMU_BIN)
 
 clippy:
-	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo clippy $(TARGET)
+	RITM_PAYLOAD=/dev/null RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo clippy $(TARGET)
+
+clippy-fix:
+	RITM_PAYLOAD=/dev/null RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo clippy --fix $(TARGET)
 
 build.qemu:
 	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo build $(TARGET)
