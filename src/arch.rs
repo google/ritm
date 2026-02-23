@@ -9,7 +9,31 @@
 //! Architecture-specific code.
 
 use arm_sysregs::{SctlrEl2, read_sctlr_el2};
-use core::arch::naked_asm;
+use core::arch::{asm, naked_asm};
+
+/// Data Synchronization Barrier.
+pub fn dsb() {
+    // SAFETY: Data Synchronization Barrier is always safe.
+    unsafe {
+        asm!("dsb sy", options(nostack, preserves_flags));
+    }
+}
+
+/// Instruction Synchronization Barrier.
+pub fn isb() {
+    // SAFETY: Instruction Synchronization Barrier is always safe.
+    unsafe {
+        asm!("isb", options(nostack, preserves_flags));
+    }
+}
+
+/// TLBI VMALLS12E1 - VMID-based Stage-1/Stage-2 combined invalidation for the EL1&0 regime.
+pub fn tlbi_vmalls12e1() {
+    // SAFETY: TLBI VMALLS12E1 is always safe.
+    unsafe {
+        asm!("tlbi vmalls12e1", options(nostack, preserves_flags));
+    }
+}
 
 /// Disables MMU and caches.
 ///

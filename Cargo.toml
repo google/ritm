@@ -1,3 +1,9 @@
+[workspace]
+members = [
+    ".",
+    "tests/isolation_test",
+]
+
 [package]
 name = "ritm"
 version = "0.1.0"
@@ -10,7 +16,7 @@ keywords = ["arm", "aarch64", "cortex-a", "osdev"]
 categories = ["embedded", "no-std"]
 
 [dependencies]
-aarch64-paging = { version = "0.11", default-features = false }
+aarch64-paging = "0.11"
 aarch64-rt = { version = "0.4.3", features = ["el2", "exceptions", "initial-pagetable", "psci"], default-features = false }
 arm-pl011-uart = "0.4"
 arm-psci = "0.2"
@@ -23,6 +29,9 @@ percore = "0.2"
 safe-mmio = "0.2"
 smccc = "0.2"
 spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-features = false }
+
+[patch.crates-io]
+aarch64-paging = { git = "https://github.com/m4tx/aarch64-paging.git", rev = "7c788ce47730e895edd6ff3ce7979c231b98dcc3" }
 
 [lints.rust]
 deprecated-safe = "warn"
