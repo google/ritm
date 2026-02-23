@@ -84,9 +84,9 @@ extern "C" fn disable_mmu_and_caches_impl() -> u64 {
 
     // Disable MMU and caches
     let mut sctlr = read_sctlr_el2();
-    sctlr.remove(SctlrEl2::M); // MMU Enable
-    sctlr.remove(SctlrEl2::C); // Data Cache Enable
-    sctlr.remove(SctlrEl2::I); // Instruction Cache Enable
+    sctlr -= SctlrEl2::M; // MMU Enable
+    sctlr -= SctlrEl2::C; // Data Cache Enable
+    sctlr -= SctlrEl2::I; // Instruction Cache Enable
     sctlr.bits()
 }
 
