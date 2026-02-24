@@ -7,8 +7,12 @@
 // except according to those terms.
 
 /// The QEMU aarch64 virt platform.
-use super::{Platform, PlatformParts, FDT_ALIGNMENT};
-use crate::{pagetable::{DEVICE_ATTRIBUTES, MEMORY_ATTRIBUTES}, platform::BootMode};
+use super::{FDT_ALIGNMENT, Platform, PlatformParts};
+use crate::pagetable::{STAGE2_DEVICE_ATTRIBUTES, STAGE2_MEMORY_ATTRIBUTES};
+use crate::{
+    pagetable::{DEVICE_ATTRIBUTES, MEMORY_ATTRIBUTES},
+    platform::BootMode,
+};
 use aarch64_paging::descriptor::Stage2Attributes;
 use aarch64_paging::idmap::IdMap;
 use aarch64_paging::paging::{MemoryRegion, TranslationRegime};
@@ -21,7 +25,6 @@ use dtoolkit::{
     fdt::Fdt,
     model::{DeviceTree, DeviceTreeNode, DeviceTreeProperty},
 };
-use crate::pagetable::{STAGE2_DEVICE_ATTRIBUTES, STAGE2_MEMORY_ATTRIBUTES};
 
 /// Base address of the first PL011 UART.
 const UART_BASE_ADDRESS: *mut PL011Registers = 0x900_0000 as _;
