@@ -13,7 +13,7 @@ PAYLOAD ?= payload.bin
 QEMU_BIN := target/ritm.qemu.bin
 QEMU_RUSTFLAGS := "--cfg platform=\"qemu\""
 
-.PHONY: all build.qemu clean clippy qemu
+.PHONY: all build.qemu clean clippy qemu test
 
 all: $(QEMU_BIN)
 
@@ -39,6 +39,9 @@ qemu: $(QEMU_BIN)
 	  -chardev socket,path=/tmp/qemu-console,server=on,wait=off,id=char0,mux=on \
 	  -device virtconsole,chardev=char0 \
 	  -device vhost-vsock-device,id=virtiosocket0,guest-cid=102
+
+test:
+	tests/isolation_test.py
 
 clean:
 	cargo clean

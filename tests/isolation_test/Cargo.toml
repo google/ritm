@@ -1,0 +1,12 @@
+[package]
+name = "isolation_test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+aarch64-rt = { version = "0.4", features = ["el1", "exceptions"], default-features = false }
+arm-pl011-uart = "0.4"
+arm-sysregs = { version = "0.2", features = ["el1"] }
+smccc = "0.2"
+spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-features = false }

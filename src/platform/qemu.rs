@@ -7,14 +7,19 @@
 // except according to those terms.
 
 /// The QEMU aarch64 virt platform.
-use super::{Platform, PlatformParts};
+use super::{FDT_ALIGNMENT, Platform, PlatformParts};
+use crate::pagetable::{STAGE2_DEVICE_ATTRIBUTES, STAGE2_MEMORY_ATTRIBUTES};
 use crate::{
     pagetable::{DEVICE_ATTRIBUTES, MEMORY_ATTRIBUTES},
     platform::BootMode,
 };
+use aarch64_paging::descriptor::Stage2Attributes;
+use aarch64_paging::idmap::IdMap;
+use aarch64_paging::paging::{MemoryRegion, TranslationRegime};
 use aarch64_rt::InitialPagetable;
 use alloc::vec::Vec;
 use arm_pl011_uart::{Interrupts, PL011Registers, Uart, UniqueMmioPointer};
+use core::alloc::Layout;
 use core::ptr::NonNull;
 use dtoolkit::{
     fdt::Fdt,
@@ -23,6 +28,8 @@ use dtoolkit::{
 
 /// Base address of the first PL011 UART.
 const UART_BASE_ADDRESS: *mut PL011Registers = 0x900_0000 as _;
+
+const RITM_END: usize = 0x4040_0000;
 
 pub struct Qemu {
     parts: Option<PlatformParts<Uart<'static>>>,
@@ -95,12 +102,71 @@ impl Platform for Qemu {
                 .build(),
         );
 
-        let new_dtb = dt.to_dtb().leak();
-        let fdt_address = new_dtb.as_ptr();
-        // SAFETY: fdt_address is a valid pointer to a device tree.
+        let new_dtb = dt.to_dtb();
+        let shared_dtb = crate::shared_alloc(
+            Layout::from_size_align(new_dtb.len(), FDT_ALIGNMENT).expect("invalid layout"),
+        );
+        shared_dtb.copy_from_slice(&new_dtb);
+
+        let fdt_address = shared_dtb.as_ptr();
+        // SAFETY: fdt_address is a valid pointer to a device tree in the shared heap.
         let fdt: Fdt<'_> =
             unsafe { Fdt::from_raw(fdt_address).expect("fdt_address is not a valid fdt") };
 
         fdt
+    }
+
+    fn make_stage2_pagetable() -> IdMap<Stage2Attributes> {
+        let mut idmap = IdMap::<Stage2Attributes>::new(0, 0, TranslationRegime::Stage2);
+
+        // Device memory
+        idmap
+            .map_range(&MemoryRegion::new(0, 0x4000_0000), STAGE2_DEVICE_ATTRIBUTES)
+            .expect("failed to map device memory");
+
+        // Normal memory
+        idmap
+            .map_range(
+                &MemoryRegion::new(RITM_END, 0x1_0000_0000),
+                STAGE2_MEMORY_ATTRIBUTES,
+            )
+            .expect("failed to map normal memory");
+
+        // High PCIe ECAM
+        idmap
+            .map_range(
+                &MemoryRegion::new(0x40_1000_0000, 0x40_2000_0000),
+                STAGE2_DEVICE_ATTRIBUTES,
+            )
+            .expect("failed to map High PCIe ECAM");
+
+        // High MMIO
+        // We split this into two ranges to avoid mapping a full L0 entry (512 GiB) as a single
+        // block, which is not supported by the architecture (L0 blocks are not supported with 4 KiB
+        // pages without enabling FEAT_LPA2)
+        idmap
+            .map_range(
+                &MemoryRegion::new(0x80_0000_0000, 0xC0_0000_0000),
+                STAGE2_DEVICE_ATTRIBUTES,
+            )
+            .expect("failed to map High MMIO (1)");
+        idmap
+            .map_range(
+                &MemoryRegion::new(0xC0_0000_0000, 0x100_0000_0000),
+                STAGE2_DEVICE_ATTRIBUTES,
+            )
+            .expect("failed to map High MMIO (2)");
+
+        // Map the shared heap
+        let shared_start = &raw const crate::SHARED_HEAP as usize;
+        let shared_end = shared_start + Self::SHARED_HEAP_SIZE;
+        idmap
+            .map_range(
+                &MemoryRegion::new(shared_start, shared_end),
+                STAGE2_MEMORY_ATTRIBUTES,
+            )
+            .expect("failed to map shared heap");
+
+        idmap
     }
 }

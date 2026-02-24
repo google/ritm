@@ -6,23 +6,30 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use core::arch::naked_asm;
-
-use aarch64_rt::{RegisterStateRef, Stack};
-use arm_sysregs::{
-    CnthctlEl2, CntvoffEl2, ElrEl2, HcrEl2, MpidrEl1, SpsrEl2, read_cnthctl_el2, read_esr_el2,
-    read_far_el2, read_hcr_el2, read_mpidr_el1, read_spsr_el2, write_cnthctl_el2,
-    write_cntvoff_el2, write_elr_el2, write_hcr_el2, write_spsr_el2,
-};
-use log::debug;
-use spin::mutex::SpinMutex;
-
 use crate::{
+    arch,
     platform::{Platform, PlatformImpl},
     simple_map::SimpleMap,
 };
+use aarch64_paging::descriptor::Stage2Attributes;
+use aarch64_paging::idmap::IdMap;
+use aarch64_rt::{RegisterStateRef, Stack};
+use arm_sysregs::{
+    CnthctlEl2, CntvoffEl2, ElrEl1, ElrEl2, EsrEl1, FarEl1, HcrEl2, MpidrEl1, SpsrEl1, SpsrEl2,
+    VtcrEl2, read_cnthctl_el2, read_esr_el2, read_far_el2, read_hcr_el2, read_mpidr_el1,
+    read_spsr_el2, read_vbar_el1, write_cnthctl_el2, write_cntvoff_el2, write_elr_el1,
+    write_elr_el2, write_esr_el1, write_far_el1, write_hcr_el2, write_spsr_el1, write_spsr_el2,
+    write_vtcr_el2,
+};
+use core::arch::naked_asm;
+use log::debug;
+use spin::Once;
+use spin::mutex::SpinMutex;
+
+static STAGE2_MAP: Once<SpinMutex<IdMap<Stage2Attributes>>> = Once::new();
 
 const SPSR_EL1H: u8 = 5;
+const T0SZ_MAX_SIZE: u8 = 64;
 
 /// Entry point for EL1 execution.
 ///
@@ -35,10 +42,12 @@ const SPSR_EL1H: u8 = 5;
 /// address for EL1 execution that never returns.
 /// This function must be called in EL2.
 pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_point: u64) -> ! {
+    setup_stage2();
     // Setup EL1
     let mut hcr = read_hcr_el2();
     hcr |= HcrEl2::RW;
     hcr |= HcrEl2::TSC;
+    hcr |= HcrEl2::VM;
     hcr -= HcrEl2::IMO;
     // SAFETY: We are configuring HCR_EL2 to allow EL1 execution.
     unsafe {
@@ -81,6 +90,39 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
     unsafe {
         eret_to_el1(arg0, arg1, arg2, arg3);
     }
+}
+
+fn setup_stage2() {
+    debug!("Setting up stage 2 page table");
+    let mut idmap = STAGE2_MAP
+        .call_once(|| SpinMutex::new(PlatformImpl::make_stage2_pagetable()))
+        .lock();
+
+    let root_pa = idmap.root_address().0;
+    debug!("Root PA: {root_pa:#x}");
+
+    // Activate the page table
+    // SAFETY: We are initializing the Stage 2 translation. The guest is not running yet.
+    let ttbr = unsafe { idmap.activate() };
+    debug!("idmap.activate() returned ttbr={ttbr:#x}");
+
+    let mut vtcr = VtcrEl2::default();
+    vtcr.set_ps(2); // 40 bit physical address size
+    vtcr.set_tg0(0); // 4kB granule size
+    vtcr.set_sh0(3); // Inner shareable memory
+    vtcr.set_orgn0(1); // Outer Write-Back Read-Allocate Write-Allocate Cacheable
+    vtcr.set_irgn0(1); // Inner Write-Back Read-Allocate Write-Allocate Cacheable
+    vtcr.set_sl0(2); // L0 starting level
+    vtcr.set_t0sz(T0SZ_MAX_SIZE - 40); // 40 bit size offset
+    debug!("Writing VTCR_EL2={vtcr:#x}...");
+    // SAFETY: We are initializing the Stage 2 translation. The guest is not running yet.
+    unsafe {
+        write_vtcr_el2(vtcr);
+    }
+    arch::tlbi_vmalls12e1();
+    arch::dsb();
+    arch::isb();
+    debug!("Stage 2 activation complete.");
 }
 
 /// Returns to EL1.
@@ -179,13 +221,59 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
                 }
             }
         }
-        ExceptionClass::Unknown(_) => {
+        ExceptionClass::DataAbortLowerEL => {
+            inject_data_abort(&mut register_state);
+        }
+        ExceptionClass::Unknown(val) => {
             panic!(
-                "Unexpected sync_lower, esr={esr_el2:#x}, far={:#x}, register_state={register_state:?}",
+                "Unexpected sync_lower, esr={esr_el2:#x}, ec={val:#x}, far={:#x}, register_state={register_state:?}",
                 read_far_el2(),
             );
         }
     }
+}
+
+fn inject_data_abort(register_state: &mut RegisterStateRef) {
+    // SAFETY: We are modifying the saved register state to redirect execution.
+    let regs = unsafe { register_state.get_mut() };
+    let fault_addr = read_far_el2();
+    let esr = read_esr_el2();
+
+    debug!("Injecting data abort to guest: fault_addr={fault_addr:#x}, esr={esr:#x}");
+
+    // Read guest VBAR
+    let vbar = read_vbar_el1().bits();
+    assert_ne!(
+        vbar, 0,
+        "Guest VBAR_EL1 is 0, cannot inject data abort. Fault addr: {fault_addr:#x}"
+    );
+    let handler = vbar + 0x200; // Current EL with SPx Sync
+
+    // Save current context to guest EL1 regs
+    // SAFETY: We are accessing EL1 system registers to inject exception.
+    unsafe {
+        write_elr_el1(ElrEl1::from_bits_retain(regs.elr as u64));
+        write_spsr_el1(SpsrEl1::from_bits_retain(regs.spsr));
+        write_far_el1(FarEl1::from_bits_retain(fault_addr.va()));
+    }
+    write_esr_el1(EsrEl1::from_bits_retain(esr.bits()));
+
+    // Redirect execution
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "only 64-bit target is supported"
+    )]
+    {
+        regs.elr = handler as usize;
+    }
+    // Mask all interrupts (DAIF) and set mode to EL1h
+    let mut spsr = SpsrEl1::default();
+    spsr.set_m_3_0(SPSR_EL1H);
+    spsr |= SpsrEl1::D;
+    spsr |= SpsrEl1::A;
+    spsr |= SpsrEl1::I;
+    spsr |= SpsrEl1::F;
+    regs.spsr = spsr.bits();
 }
 
 const AARCH64_INSTRUCTION_LENGTH: usize = 4;
@@ -369,6 +457,8 @@ enum ExceptionClass {
     HvcTrappedInAArch64,
     /// SMC instruction execution in `AArch64` state.
     SmcTrappedInAArch64,
+    /// Data Abort taken without a change in Exception Level.
+    DataAbortLowerEL,
     #[allow(unused)]
     /// Unknown exception class.
     Unknown(u8),
@@ -379,6 +469,7 @@ impl From<u8> for ExceptionClass {
         match value {
             0x16 => Self::HvcTrappedInAArch64,
             0x17 => Self::SmcTrappedInAArch64,
+            0x24 => Self::DataAbortLowerEL,
             _ => Self::Unknown(value),
         }
     }
