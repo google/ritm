@@ -11,8 +11,8 @@ use crate::{
     platform::{Platform, PlatformImpl},
     simple_map::SimpleMap,
 };
-use aarch64_paging::descriptor::Stage2Attributes;
 use aarch64_paging::idmap::IdMap;
+use aarch64_paging::paging::Stage2;
 use aarch64_rt::{RegisterStateRef, Stack};
 use arm_sysregs::{
     CnthctlEl2, CntvoffEl2, ElrEl1, ElrEl2, EsrEl1, FarEl1, HcrEl2, MpidrEl1, SpsrEl1, SpsrEl2,
@@ -26,7 +26,7 @@ use log::debug;
 use spin::Once;
 use spin::mutex::SpinMutex;
 
-static STAGE2_MAP: Once<SpinMutex<IdMap<Stage2Attributes>>> = Once::new();
+static STAGE2_MAP: Once<SpinMutex<IdMap<Stage2>>> = Once::new();
 
 const SPSR_EL1H: u8 = 5;
 const T0SZ_MAX_SIZE: u8 = 64;

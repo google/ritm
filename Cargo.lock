@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "aarch64-paging"
 version = "0.11.0"
-source = "git+https://github.com/m4tx/aarch64-paging.git?rev=7c788ce47730e895edd6ff3ce7979c231b98dcc3#7c788ce47730e895edd6ff3ce7979c231b98dcc3"
+source = "git+https://github.com/google/aarch64-paging.git?rev=e2d38a5b10907847b71661fa10742e19b10f96e6#e2d38a5b10907847b71661fa10742e19b10f96e6"
 dependencies = [
  "bitflags",
  "thiserror",

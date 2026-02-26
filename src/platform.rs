@@ -9,9 +9,8 @@
 #[cfg(platform = "qemu")]
 mod qemu;
 
-use aarch64_paging::descriptor::Stage2Attributes;
 use aarch64_paging::idmap::IdMap;
-use aarch64_paging::paging::PAGE_SIZE;
+use aarch64_paging::paging::{PAGE_SIZE, Stage2};
 use dtoolkit::fdt::Fdt;
 use embedded_io::{Write, WriteReady};
 #[cfg(platform = "qemu")]
@@ -22,7 +21,7 @@ pub type ConsoleImpl = <PlatformImpl as Platform>::Console;
 /// Default alignment for the modified FDT blob.
 ///
 /// This is 8 bytes, as Linux requires the device tree to be "placed on an 8-byte boundary":
-/// https://docs.kernel.org/arch/arm64/booting.html#setup-the-device-tree
+/// <https://docs.kernel.org/arch/arm64/booting.html#setup-the-device-tree>
 pub const FDT_ALIGNMENT: usize = 8;
 
 /// Platform-specific code.
@@ -63,7 +62,7 @@ pub trait Platform {
     ///
     /// The page table should typically unmap the part of the memory where RITM resides, so that
     /// the guest cannot interact with it in any way.
-    fn make_stage2_pagetable() -> IdMap<Stage2Attributes>;
+    fn make_stage2_pagetable() -> IdMap<Stage2>;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

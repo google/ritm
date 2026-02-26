@@ -7,21 +7,21 @@
 // except according to those terms.
 
 use crate::platform::PlatformImpl;
-use aarch64_paging::descriptor::{Stage1Attributes, Stage2Attributes};
+use aarch64_paging::descriptor::{El2Attributes, Stage2Attributes};
 use aarch64_rt::initial_pagetable;
 
 /// Attributes to use for device memory in the initial identity map.
-pub const DEVICE_ATTRIBUTES: Stage1Attributes = Stage1Attributes::VALID
-    .union(Stage1Attributes::ATTRIBUTE_INDEX_0)
-    .union(Stage1Attributes::ACCESSED)
-    .union(Stage1Attributes::UXN);
+pub const DEVICE_ATTRIBUTES: El2Attributes = El2Attributes::VALID
+    .union(El2Attributes::ATTRIBUTE_INDEX_0)
+    .union(El2Attributes::ACCESSED)
+    .union(El2Attributes::XN);
 
 /// Attributes to use for normal memory in the initial identity map.
-pub const MEMORY_ATTRIBUTES: Stage1Attributes = Stage1Attributes::VALID
-    .union(Stage1Attributes::ATTRIBUTE_INDEX_1)
-    .union(Stage1Attributes::INNER_SHAREABLE)
-    .union(Stage1Attributes::ACCESSED)
-    .union(Stage1Attributes::NON_GLOBAL);
+pub const MEMORY_ATTRIBUTES: El2Attributes = El2Attributes::VALID
+    .union(El2Attributes::ATTRIBUTE_INDEX_1)
+    .union(El2Attributes::INNER_SHAREABLE)
+    .union(El2Attributes::ACCESSED)
+    .union(El2Attributes::NON_GLOBAL);
 
 // The initial hardcoded page table used before the Rust code starts and activates the main page
 // table.

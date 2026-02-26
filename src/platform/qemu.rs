@@ -13,9 +13,8 @@ use crate::{
     pagetable::{DEVICE_ATTRIBUTES, MEMORY_ATTRIBUTES},
     platform::BootMode,
 };
-use aarch64_paging::descriptor::Stage2Attributes;
 use aarch64_paging::idmap::IdMap;
-use aarch64_paging::paging::{MemoryRegion, TranslationRegime};
+use aarch64_paging::paging::{MemoryRegion, Stage2};
 use aarch64_rt::InitialPagetable;
 use alloc::vec::Vec;
 use arm_pl011_uart::{Interrupts, PL011Registers, Uart, UniqueMmioPointer};
@@ -116,8 +115,8 @@ impl Platform for Qemu {
         fdt
     }
 
-    fn make_stage2_pagetable() -> IdMap<Stage2Attributes> {
-        let mut idmap = IdMap::<Stage2Attributes>::new(0, 0, TranslationRegime::Stage2);
+    fn make_stage2_pagetable() -> IdMap<Stage2> {
+        let mut idmap = IdMap::new((), 0, Stage2);
 
         // Device memory
         idmap
