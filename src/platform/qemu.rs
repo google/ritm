@@ -14,7 +14,7 @@ use crate::{
     platform::BootMode,
 };
 use aarch64_paging::idmap::IdMap;
-use aarch64_paging::paging::{MemoryRegion, Stage2};
+use aarch64_paging::paging::{Constraints, MemoryRegion, Stage2};
 use aarch64_rt::InitialPagetable;
 use alloc::vec::Vec;
 use arm_pl011_uart::{Interrupts, PL011Registers, Uart, UniqueMmioPointer};
@@ -146,7 +146,7 @@ impl Platform for Qemu {
             .map_range_with_constraints(
                 &MemoryRegion::new(0x80_0000_0000, 0x100_0000_0000),
                 STAGE2_DEVICE_ATTRIBUTES,
-                aarch64_paging::paging::Constraints::NO_L0_BLOCK_MAPPINGS,
+                Constraints::NO_L0_BLOCK_MAPPINGS,
             )
             .expect("failed to map High MMIO");
 
