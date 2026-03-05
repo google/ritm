@@ -116,7 +116,7 @@ impl Platform for Qemu {
     }
 
     fn make_stage2_pagetable() -> IdMap<Stage2> {
-        let mut idmap = IdMap::new((), 0, Stage2);
+        let mut idmap = IdMap::new(0, Stage2);
 
         // Device memory
         idmap
@@ -140,21 +140,15 @@ impl Platform for Qemu {
             .expect("failed to map High PCIe ECAM");
 
         // High MMIO
-        // We split this into two ranges to avoid mapping a full L0 entry (512 GiB) as a single
-        // block, which is not supported by the architecture (L0 blocks are not supported with 4 KiB
-        // pages without enabling FEAT_LPA2)
+        // L0 blocks are not supported with 4 KiB pages without enabling FEAT_LPA2,
+        // so we disable them using the `NO_L0_BLOCK_MAPPINGS` constraint.
         idmap
-            .map_range(
-                &MemoryRegion::new(0x80_0000_0000, 0xC0_0000_0000),
+            .map_range_with_constraints(
+                &MemoryRegion::new(0x80_0000_0000, 0x100_0000_0000),
                 STAGE2_DEVICE_ATTRIBUTES,
+                aarch64_paging::paging::Constraints::NO_L0_BLOCK_MAPPINGS,
             )
-            .expect("failed to map High MMIO (1)");
-        idmap
-            .map_range(
-                &MemoryRegion::new(0xC0_0000_0000, 0x100_0000_0000),
-                STAGE2_DEVICE_ATTRIBUTES,
-            )
-            .expect("failed to map High MMIO (2)");
+            .expect("failed to map High MMIO");
 
         // Map the shared heap
         let shared_start = &raw const crate::SHARED_HEAP as usize;
