@@ -42,6 +42,33 @@ make build.qemu PAYLOAD=/path/to/your/linux/Image
 If you do not specify `PAYLOAD`, it defaults to looking for a file named
 `payload.bin` in the root directory.
 
+## Platforms
+
+### Supported
+
+#### QEMU
+
+The reference environment is **QEMU (aarch64 `virt` machine)**
+(`src/platform/qemu.rs`). It uses a PL011 UART console, relies on a static
+early-boot memory map, and patches the Device Tree (FDT) to hide `ritm`'s
+memory from the payload.
+
+### Customization
+
+#### Modifying an existing platform
+
+Adjust device addresses, pagetables, or FDT logic in the platform's source
+file and update its linker script. See `src/platform/qemu.rs` and
+`linker/qemu.ld` for the reference example.
+
+### How to add a new platform
+
+1. Implement the `Platform` trait (`src/platform.rs`) in a new module
+   to provide the console, early pagetable, and boot configuration.
+2. Conditionally export it via `#[cfg(platform = "...")]`.
+3. Provide a memory layout linker script in `linker/`.
+4. Register the new platform in `build.rs` and the `Makefile`.
+
 ## License
 
 This software is distributed under the terms of both the MIT license and the
