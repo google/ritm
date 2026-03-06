@@ -30,7 +30,7 @@ smccc = "0.2"
 spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-features = false }
 
 [patch.crates-io]
-aarch64-paging = { git = "https://github.com/google/aarch64-paging.git", rev = "dbb58dcfb4f4d6fdcdd39d37311afde59f5c5aa1" }
+aarch64-paging = { git = "https://github.com/google/aarch64-paging.git", rev = "d9eef66538518f954c1988fb892471e252ad2907" }
 
 [lints.rust]
 deprecated-safe = "warn"

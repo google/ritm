@@ -14,7 +14,7 @@ use crate::{
     platform::BootMode,
 };
 use aarch64_paging::idmap::IdMap;
-use aarch64_paging::paging::{Constraints, MemoryRegion, Stage2};
+use aarch64_paging::paging::{MemoryRegion, Stage2};
 use aarch64_rt::InitialPagetable;
 use alloc::vec::Vec;
 use arm_pl011_uart::{Interrupts, PL011Registers, Uart, UniqueMmioPointer};
@@ -140,13 +140,10 @@ impl Platform for Qemu {
             .expect("failed to map High PCIe ECAM");
 
         // High MMIO
-        // L0 blocks are not supported with 4 KiB pages without enabling FEAT_LPA2,
-        // so we disable them using the `NO_L0_BLOCK_MAPPINGS` constraint.
         idmap
-            .map_range_with_constraints(
+            .map_range(
                 &MemoryRegion::new(0x80_0000_0000, 0x100_0000_0000),
                 STAGE2_DEVICE_ATTRIBUTES,
-                Constraints::NO_L0_BLOCK_MAPPINGS,
             )
             .expect("failed to map High MMIO");
 
