@@ -16,7 +16,7 @@ keywords = ["arm", "aarch64", "cortex-a", "osdev"]
 categories = ["embedded", "no-std"]
 
 [dependencies]
-aarch64-paging = "0.11"
+aarch64-paging = "0.12"
 aarch64-rt = { version = "0.4.3", features = ["el2", "exceptions", "initial-pagetable", "psci"], default-features = false }
 arm-pl011-uart = "0.5"
 arm-psci = "0.2"
@@ -28,9 +28,6 @@ log = "0.4"
 percore = "0.2"
 smccc = "0.2"
 spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-features = false }
-
-[patch.crates-io]
-aarch64-paging = { git = "https://github.com/google/aarch64-paging.git", rev = "d9eef66538518f954c1988fb892471e252ad2907" }
 
 [lints.rust]
 deprecated-safe = "warn"
