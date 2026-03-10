@@ -27,6 +27,7 @@ mod payload_constants {
 use aarch64_paging::paging::PAGE_SIZE;
 use aarch64_rt::{entry, exception_handlers};
 use buddy_system_allocator::{Heap, LockedHeap};
+use core::alloc::Layout;
 use core::arch::naked_asm;
 use core::ops::DerefMut;
 use dtoolkit::fdt::Fdt;
@@ -44,8 +45,14 @@ const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 const HEAP_SIZE: usize = 40 * PAGE_SIZE;
 static HEAP: SpinMutex<[u8; HEAP_SIZE]> = SpinMutex::new([0; HEAP_SIZE]);
 
+static SHARED_HEAP: SpinMutex<[u8; PlatformImpl::SHARED_HEAP_SIZE]> =
+    SpinMutex::new([0; PlatformImpl::SHARED_HEAP_SIZE]);
+
 #[global_allocator]
 static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
+
+/// Heap allocator for data that needs to be shared between RITM and the guest running in EL1.
+pub static SHARED_HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
 
 #[repr(align(0x200000))] // Linux requires 2MB alignment
 struct AlignImage<T>(T);
@@ -72,6 +79,12 @@ fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     add_to_heap(
         HEAP_ALLOCATOR.lock().deref_mut(),
         SpinMutexGuard::leak(HEAP.try_lock().expect("failed to lock heap")).as_mut_slice(),
+    );
+
+    add_to_heap(
+        SHARED_HEAP_ALLOCATOR.lock().deref_mut(),
+        SpinMutexGuard::leak(SHARED_HEAP.try_lock().expect("failed to lock shared heap"))
+            .as_mut_slice(),
     );
 
     let fdt_address = x0 as *const u8;
@@ -137,4 +150,18 @@ unsafe fn run_payload_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     unsafe {
         hypervisor::entry_point_el1(x0, x1, x2, x3, &raw const NEXT_IMAGE.0 as u64);
     }
+}
+
+/// Allocates a buffer from the shared heap.
+///
+/// # Panics
+///
+/// Panics if the requested size is invalid or if the allocation fails.
+pub fn shared_alloc(layout: Layout) -> &'static mut [u8] {
+    let ptr = SHARED_HEAP_ALLOCATOR
+        .lock()
+        .alloc(layout)
+        .expect("failed to allocate from shared heap");
+    // SAFETY: The pointer is valid and represents the requested size.
+    unsafe { core::slice::from_raw_parts_mut(ptr.as_ptr(), layout.size()) }
 }
