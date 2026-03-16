@@ -48,9 +48,9 @@ dependencies = [
 
 [[package]]
 name = "arm-sysregs"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40c3067b76e768c5b78a7c5e75128bd4ae4a06b6f8ab10ceb038a299bab4d74e"
+checksum = "0c4ac0251cac9438962b6767442e23fbf45141b89a30a5ea8ef0d1e4d65bd1f7"
 dependencies = [
  "bitflags",
  "num_enum",
