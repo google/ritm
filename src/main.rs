@@ -96,6 +96,9 @@ fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     let new_fdt = platform.modify_dt(fdt);
     let dtb_ptr = new_fdt.data().as_ptr() as u64;
 
+    let idmap = PlatformImpl::make_stage2_pagetable(&new_fdt);
+    hypervisor::init_stage2(idmap);
+
     let boot_mode = platform.boot_mode(&new_fdt);
     info!("Booting in {boot_mode:?}");
 

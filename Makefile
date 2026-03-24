@@ -33,7 +33,7 @@ qemu: $(QEMU_BIN)
 	qemu-system-aarch64 -machine virt,virtualization=on,gic-version=3 -cpu cortex-a57 -display none -kernel $< -s \
 	  -smp 4 -serial mon:stdio \
 	  -global virtio-mmio.force-legacy=false \
-	  -drive file=/dev/null,if=none,format=raw,id=x0 \
+	  -drive file=target/dummy.img,if=none,format=raw,id=x0 \
 	  -device virtio-blk-device,drive=x0 \
 	  -device virtio-serial,id=virtio-serial0 \
 	  -chardev socket,path=/tmp/qemu-console,server=on,wait=off,id=char0,mux=on \

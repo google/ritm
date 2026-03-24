@@ -92,11 +92,13 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
     }
 }
 
+pub fn init_stage2(idmap: IdMap<Stage2>) {
+    STAGE2_MAP.call_once(|| SpinMutex::new(idmap));
+}
+
 fn setup_stage2() {
     debug!("Setting up stage 2 page table");
-    let mut idmap = STAGE2_MAP
-        .call_once(|| SpinMutex::new(PlatformImpl::make_stage2_pagetable()))
-        .lock();
+    let mut idmap = STAGE2_MAP.get().expect("STAGE2_MAP not initialized").lock();
 
     let root_pa = idmap.root_address().0;
     debug!("Root PA: {root_pa:#x}");

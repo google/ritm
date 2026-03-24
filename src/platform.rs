@@ -62,7 +62,7 @@ pub trait Platform {
     ///
     /// The page table should typically unmap the part of the memory where RITM resides, so that
     /// the guest cannot interact with it in any way.
-    fn make_stage2_pagetable() -> IdMap<Stage2>;
+    fn make_stage2_pagetable(fdt: &Fdt) -> IdMap<Stage2>;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
