@@ -50,7 +50,12 @@ impl Qemu {
     }
 
     fn read_boot_mode_from_cmd(fdt: &Fdt) -> Option<BootMode> {
-        let args = fdt.root().child("chosen")?.property("bootargs")?.as_str().ok()?;
+        let args = fdt
+            .root()
+            .child("chosen")?
+            .property("bootargs")?
+            .as_str()
+            .ok()?;
         for arg in args.split_whitespace() {
             if let Some(boot_mode) = arg.strip_prefix("ritm.boot_mode=") {
                 match boot_mode {
