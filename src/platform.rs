@@ -50,7 +50,7 @@ pub trait Platform {
     fn parts(&mut self) -> Option<PlatformParts<Self::Console>>;
 
     /// Returns the intended boot mode for current device configuration.
-    fn boot_mode(&self) -> BootMode;
+    fn boot_mode(&self, fdt: &Fdt) -> BootMode;
 
     /// Modify the Device Tree if needed to adjust for the platform's needs. That might include
     /// reserving memory for RITM, or changing the PSCI method.

@@ -53,6 +53,17 @@ The reference environment is **QEMU (aarch64 `virt` machine)**
 early-boot memory map, and patches the Device Tree (FDT) to hide `ritm`'s
 memory from the payload.
 
+To choose between booting the payload in EL1 and EL2, the `ritm.boot_mode`
+command line option can be used:
+
+```bash
+qemu-system-aarch64 -append "ritm.boot_mode=el1" ...
+# or:
+qemu-system-aarch64 -append "ritm.boot_mode=el2" ...
+```
+
+By default, the payload is booted in EL1.
+
 ### Customization
 
 #### Modifying an existing platform
