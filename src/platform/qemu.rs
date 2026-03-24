@@ -50,17 +50,13 @@ impl Qemu {
     }
 
     fn read_boot_mode_from_cmd(fdt: &Fdt) -> Option<BootMode> {
-        if let Some(chosen) = fdt.root().child("chosen")
-            && let Some(bootargs) = chosen.property("bootargs")
-            && let Ok(args) = bootargs.as_str()
-        {
-            for arg in args.split_whitespace() {
-                if let Some(boot_mode) = arg.strip_prefix("ritm.boot_mode=") {
-                    match boot_mode {
-                        "el2" => return Some(BootMode::El2),
-                        "el1" => return Some(BootMode::El1),
-                        _ => warn!("Unknown boot mode specified: {arg}"),
-                    }
+        let args = fdt.root().child("chosen")?.property("bootargs")?.as_str().ok()?;
+        for arg in args.split_whitespace() {
+            if let Some(boot_mode) = arg.strip_prefix("ritm.boot_mode=") {
+                match boot_mode {
+                    "el2" => return Some(BootMode::El2),
+                    "el1" => return Some(BootMode::El1),
+                    _ => warn!("Unknown boot mode specified: {arg}"),
                 }
             }
         }
