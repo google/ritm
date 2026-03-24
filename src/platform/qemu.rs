@@ -21,9 +21,11 @@ use arm_pl011_uart::{Interrupts, PL011Registers, Uart, UniqueMmioPointer};
 use core::alloc::Layout;
 use core::ptr::NonNull;
 use dtoolkit::{
+    Node, Property,
     fdt::Fdt,
     model::{DeviceTree, DeviceTreeNode, DeviceTreeProperty},
 };
+use log::warn;
 
 /// Base address of the first PL011 UART.
 const UART_BASE_ADDRESS: *mut PL011Registers = 0x900_0000 as _;
@@ -45,6 +47,25 @@ impl Qemu {
         // 1 GiB of DRAM.
         idmap[2] = DEVICE_ATTRIBUTES.bits() | 0x8000_0000;
         InitialPagetable(idmap)
+    }
+
+    fn read_boot_mode_from_cmd(fdt: &Fdt) -> Option<BootMode> {
+        if let Some(chosen) = fdt.root().child("chosen")
+            && let Some(bootargs) = chosen.property("bootargs")
+            && let Ok(args) = bootargs.as_str()
+        {
+            for arg in args.split_whitespace() {
+                if let Some(boot_mode) = arg.strip_prefix("ritm.boot_mode=") {
+                    match boot_mode {
+                        "el2" => return Some(BootMode::El2),
+                        "el1" => return Some(BootMode::El1),
+                        _ => warn!("Unknown boot mode specified: {arg}"),
+                    }
+                }
+            }
+        }
+
+        None
     }
 }
 
@@ -74,11 +95,8 @@ impl Platform for Qemu {
         self.parts.take()
     }
 
-    fn boot_mode(&self) -> BootMode {
-        // This is just hardcoded for QEMU, but a real platform implementation should most likely
-        // check some external conditions (e.g. whether the bootloader is unlocked) to choose
-        // beetween booting in EL1 or EL2.
-        BootMode::El1
+    fn boot_mode(&self, fdt: &Fdt) -> BootMode {
+        Self::read_boot_mode_from_cmd(fdt).unwrap_or(BootMode::El1)
     }
 
     fn modify_dt(&self, fdt: Fdt<'static>) -> Fdt<'static> {

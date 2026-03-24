@@ -96,12 +96,12 @@ fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     let new_fdt = platform.modify_dt(fdt);
     let dtb_ptr = new_fdt.data().as_ptr() as u64;
 
-    let boot_mode = platform.boot_mode();
+    let boot_mode = platform.boot_mode(&new_fdt);
     info!("Booting in {boot_mode:?}");
 
     // SAFETY: We assume there's a valid executable at `NEXT_IMAGE`.
     unsafe {
-        match platform.boot_mode() {
+        match boot_mode {
             BootMode::El1 => run_payload_el1(dtb_ptr, x1, x2, x3),
             BootMode::El2 => run_payload_el2(dtb_ptr, x1, x2, x3),
         }
