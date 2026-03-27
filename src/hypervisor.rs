@@ -28,6 +28,7 @@ use spin::mutex::SpinMutex;
 
 static STAGE2_MAP: Once<SpinMutex<IdMap<Stage2>>> = Once::new();
 
+const AARCH64_INSTRUCTION_LENGTH: usize = 4;
 const SPSR_EL1H: u8 = 5;
 const T0SZ_MAX_SIZE: u8 = 64;
 
@@ -202,8 +203,6 @@ pub unsafe extern "C" fn eret_to_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
         "eret",
     );
 }
-
-const AARCH64_INSTRUCTION_LENGTH: usize = 4;
 
 pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
     let esr_el2 = read_esr_el2();
@@ -474,7 +473,7 @@ static SUSPEND_CONTEXTS: SpinMutex<SimpleMap<MpidrEl1, SuspendCoreData, MAX_CORE
     SpinMutex::new(SimpleMap::new());
 
 /// The class of an exception.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum ExceptionClass {
     /// HVC instruction execution in `AArch64` state.
     HvcTrappedInAArch64,
