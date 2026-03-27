@@ -37,8 +37,40 @@ fn get_uart() -> SpinMutexGuard<'static, Uart<'static>> {
 }
 
 fn main(_arg0: u64, _arg1: u64, _arg2: u64, _arg3: u64) -> ! {
-    writeln!(get_uart(), "TEST: Starting isolation test").unwrap();
+    writeln!(get_uart(), "TEST: Starting integration tests").unwrap();
 
+    test_psci();
+    test_dummy_hvc();
+    test_unknown_hvc();
+    test_memory_isolation();
+    power_off();
+}
+
+fn test_psci() {
+    let version = smccc::psci::version::<smccc::Hvc>();
+    writeln!(get_uart(), "TEST: PSCI version: {:?}", version).unwrap();
+    if version.is_err() {
+        panic!("PSCI version call failed");
+    }
+}
+
+fn test_dummy_hvc() {
+    writeln!(get_uart(), "TEST: Attempting a dummy HVC call...").unwrap();
+    let [res, ..] = smccc::hvc64(0xFF00_0000, [0; 17]);
+
+    if res != 0x1234_5678_9ABC_DEF0 {
+        panic!("Dummy HVC failed, x0={:#x}", res);
+    }
+    writeln!(get_uart(), "TEST: Dummy HVC succeeded").unwrap();
+}
+
+fn test_unknown_hvc() {
+    writeln!(get_uart(), "TEST: Attempting an unknown HVC call...").unwrap();
+    let [res, ..] = smccc::hvc64(0xFF00_0001, [0; 17]);
+    writeln!(get_uart(), "TEST: Unknown HVC handled (returned {res:#x})",).unwrap();
+}
+
+fn test_memory_isolation() {
     writeln!(
         get_uart(),
         "TEST: Attempting to read protected memory at {:#x}",
@@ -49,13 +81,16 @@ fn main(_arg0: u64, _arg1: u64, _arg2: u64, _arg3: u64) -> ! {
     // We expect this to trap
     let val = unsafe { core::ptr::read_volatile(RITM_BASE as *const u64) };
 
-    writeln!(get_uart(), "TEST: FAILED: Read successful: {:#x}", val).unwrap();
-    power_off();
+    // If we reach here, the test failed
+    panic!(
+        "Isolation test failed! Read value {:#x} from protected memory",
+        val
+    );
 }
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    writeln!(get_uart(), "TEST: PANIC: {}", info).unwrap();
+    let _ = writeln!(get_uart(), "TEST: PANIC: {}", info);
     power_off();
 }
 
@@ -72,6 +107,7 @@ impl ExceptionHandlers for Exceptions {
                 "TEST: Caught expected Data Abort! Isolation test passed.",
             )
             .unwrap();
+            writeln!(get_uart(), "TEST: All tests passed!").unwrap();
             power_off();
         } else {
             panic!("Unexpected exception: ESR={:#x}", esr);

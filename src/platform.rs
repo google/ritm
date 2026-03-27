@@ -63,6 +63,15 @@ pub trait Platform {
     /// The page table should typically unmap the part of the memory where RITM resides, so that
     /// the guest cannot interact with it in any way.
     fn make_stage2_pagetable() -> IdMap<Stage2>;
+
+    /// Handles a custom HVC call.
+    ///
+    /// The default implementation returns `false`, indicating the call was not handled.
+    /// If handled, it should modify `register_state` as needed and return `true`.
+    fn handle_hvc(register_state: &mut aarch64_rt::RegisterStateRef) -> bool {
+        let _ = register_state;
+        false
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
