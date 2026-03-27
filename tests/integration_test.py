@@ -15,9 +15,9 @@ import time
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
-TEST_DIR = PROJECT_ROOT / "tests" / "isolation_test"
-PAYLOAD_ELF = PROJECT_ROOT / "target" / "aarch64-unknown-none" / "release" / "isolation_test"
-PAYLOAD_BIN = PROJECT_ROOT / "target" / "aarch64-unknown-none" / "release" / "isolation_test.bin"
+TEST_DIR = PROJECT_ROOT / "tests" / "integration_test"
+PAYLOAD_ELF = PROJECT_ROOT / "target" / "aarch64-unknown-none" / "release" / "integration_test"
+PAYLOAD_BIN = PROJECT_ROOT / "target" / "aarch64-unknown-none" / "release" / "integration_test.bin"
 
 def run_command(cmd, cwd=None, env=None, check=True):
     print(f"Running: {' '.join(str(c) for c in cmd)}")
@@ -28,17 +28,17 @@ def run_command(cmd, cwd=None, env=None, check=True):
     return result
 
 def main():
-    print("Building isolation_test payload...")
+    print("Building integration_test payload...")
     env = os.environ.copy()
     run_command(
-        ["cargo", "build", "--release", "--locked", "--target", "aarch64-unknown-none", "-p", "isolation_test"],
+        ["cargo", "build", "--release", "--locked", "--target", "aarch64-unknown-none", "-p", "integration_test"],
         cwd=TEST_DIR,
         env=env
     )
 
     print("Creating payload binary...")
     run_command(
-        ["cargo", "objcopy", "--target", "aarch64-unknown-none", "-p", "isolation_test", "--", "-O", "binary", str(PAYLOAD_BIN)],
+        ["cargo", "objcopy", "--target", "aarch64-unknown-none", "-p", "integration_test", "--", "-O", "binary", str(PAYLOAD_BIN)],
         cwd=PROJECT_ROOT
     )
 
@@ -61,8 +61,9 @@ def main():
         env=env
     )
 
-    success_string = "Caught expected Data Abort! Isolation test passed."
-    failure_string = "FAILED"
+    success_string = "TEST: All tests passed!"
+    failure_string = "PANIC"
+
     start_time = time.time()
     timeout = 30 # seconds
 

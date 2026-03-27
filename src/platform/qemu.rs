@@ -178,4 +178,20 @@ impl Platform for Qemu {
 
         idmap
     }
+
+    fn handle_hvc(register_state: &mut aarch64_rt::RegisterStateRef) -> bool {
+        let function_id = register_state.registers[0];
+
+        // Dummy HVC for testing
+        if function_id == 0xFF00_0000 {
+            // SAFETY: We only modify the state of the x0 register as an answer to the
+            // guest call.
+            let regs = unsafe { register_state.get_mut() };
+
+            regs.registers[0] = 0x1234_5678_9ABC_DEF0;
+            return true;
+        }
+
+        false
+    }
 }

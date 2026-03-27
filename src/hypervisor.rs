@@ -211,6 +211,7 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
     match ec {
         ExceptionClass::HvcTrappedInAArch64 | ExceptionClass::SmcTrappedInAArch64 => {
             let function_id = register_state.registers[0];
+            debug!("HVC/SMC call: function_id={function_id:#x}");
 
             match function_id {
                 0x8400_0000..=0x8400_001F | 0xC400_0000..=0xC400_001F => {
@@ -218,7 +219,18 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
                         .expect("Unknown PSCI call: {register_state:?}");
                 }
                 _ => {
-                    panic!("Unknown HVC/SMC call: function_id={function_id:x}; {register_state:?}");
+                    debug!("Forwarding HVC call to platform");
+                    if !PlatformImpl::handle_hvc(&mut register_state) {
+                        debug!("HVC call not handled by platform, returning NOT_SUPPORTED");
+                        // SAFETY: we are just answering the guest call without any changes.
+                        unsafe {
+                            let regs = register_state.get_mut();
+                            #[expect(clippy::cast_sign_loss)]
+                            {
+                                regs.registers[0] = smccc::arch::error::NOT_SUPPORTED as u64;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -302,7 +314,7 @@ fn inject_data_abort(register_state: &mut RegisterStateRef) {
     regs.spsr = spsr.bits();
 }
 
-fn try_handle_psci(register_state: &mut RegisterStateRef) -> Result<(), arm_psci::Error> {
+fn try_handle_psci(register_state: &mut RegisterStateRef) -> Result<u64, arm_psci::Error> {
     let [fn_id, arg0, arg1, arg2, ..] = register_state.registers;
     debug!(
         "Forwarding the PSCI call: fn_id={fn_id:#x}, arg0={arg0:#x}, arg1={arg1:#x}, arg2={arg2:#x}"
@@ -321,7 +333,7 @@ fn try_handle_psci(register_state: &mut RegisterStateRef) -> Result<(), arm_psci
         regs.registers[3] = 0;
     }
 
-    Ok(())
+    Ok(out)
 }
 
 /// Handles a PSCI call.

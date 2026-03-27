@@ -129,7 +129,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "isolation_test"
+name = "integration_test"
 version = "0.1.0"
 dependencies = [
  "aarch64-rt",
