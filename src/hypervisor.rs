@@ -203,6 +203,8 @@ pub unsafe extern "C" fn eret_to_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     );
 }
 
+const AARCH64_INSTRUCTION_LENGTH: usize = 4;
+
 pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
     let esr_el2 = read_esr_el2();
     let ec = ExceptionClass::from(esr_el2.ec());
@@ -217,7 +219,7 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
                         .expect("Unknown PSCI call: {register_state:?}");
                 }
                 _ => {
-                    panic!("Unknown HVC/SMC call: {register_state:?}");
+                    panic!("Unknown HVC/SMC call: function_id={function_id:x}; {register_state:?}");
                 }
             }
         }
@@ -230,6 +232,31 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
                 read_far_el2(),
             );
         }
+    }
+
+    if ec == ExceptionClass::SmcTrappedInAArch64 {
+        // When HVC is called in the guest, ELR gets set to the next instruction:
+        // https://developer.arm.com/documentation/ddi0487/maa/-Part-J-Architectural-Pseudocode/-Chapter-J1-A-profile-Architecture-Pseudocode/-J1-1-Pseudocode-for-AArch64-operation/-J1-1-165-AArch64-CallHypervisor?lang=en#asl_aarch64_callhypervisor_1
+        // ```
+        // AArch64.CallHypervisor(bits(16) immediate)
+        //     preferred_exception_return = NextInstrAddr(64);
+        // ```
+        //
+        // However, when SMC is called in the guest, this creates an instruction abort instead (as SMC is not
+        // normally expected at EL1, even though we trap it), and so ELR gets set to the *same* instruction,
+        // potentially causing a loop:
+        // https://developer.arm.com/documentation/ddi0596/2021-09/Shared-Pseudocode/AArch64-Exceptions?lang=en#AArch64.CheckForSMCUndefOrTrap.1
+        // ```
+        // AArch64.InstructionAbort(bits(64) vaddress, FaultRecord fault)
+        //     bits(64) preferred_exception_return = ThisInstrAddr();
+        // ```
+        //
+        // Therefore, when we get an SMC, we advance the PC to the next instruction.
+
+        // SAFETY: This is an answer to the guest calling SMC. The call needs to be skipped so that after returning
+        // back to the guest, it will not be executed again.
+        let regs = unsafe { register_state.get_mut() };
+        regs.elr += AARCH64_INSTRUCTION_LENGTH;
     }
 }
 
@@ -276,8 +303,6 @@ fn inject_data_abort(register_state: &mut RegisterStateRef) {
     regs.spsr = spsr.bits();
 }
 
-const AARCH64_INSTRUCTION_LENGTH: usize = 4;
-
 fn try_handle_psci(register_state: &mut RegisterStateRef) -> Result<(), arm_psci::Error> {
     let [fn_id, arg0, arg1, arg2, ..] = register_state.registers;
     debug!(
@@ -288,15 +313,13 @@ fn try_handle_psci(register_state: &mut RegisterStateRef) -> Result<(), arm_psci
     debug!("PSCI call output: out={out:#x}");
 
     // SAFETY: This is an answer to the guest calling HVC/SMC, so it expects x0..3 will
-    // get overwritten. The HVC/SMC call needs to be skipped so that after returning back
-    // to the guest, it will not be executed again.
+    // get overwritten.
     unsafe {
         let regs = register_state.get_mut();
         regs.registers[0] = out;
         regs.registers[1] = 0;
         regs.registers[2] = 0;
         regs.registers[3] = 0;
-        regs.elr += AARCH64_INSTRUCTION_LENGTH; // move to the next instruction to avoid looping
     }
 
     Ok(())
@@ -451,7 +474,7 @@ static SUSPEND_CONTEXTS: SpinMutex<SimpleMap<MpidrEl1, SuspendCoreData, MAX_CORE
     SpinMutex::new(SimpleMap::new());
 
 /// The class of an exception.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum ExceptionClass {
     /// HVC instruction execution in `AArch64` state.
     HvcTrappedInAArch64,
