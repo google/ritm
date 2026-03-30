@@ -8,6 +8,7 @@
 
 /// The QEMU aarch64 virt platform.
 use super::{FDT_ALIGNMENT, Platform, PlatformParts};
+use crate::hvc_response::HvcResult;
 use crate::pagetable::{STAGE2_DEVICE_ATTRIBUTES, STAGE2_MEMORY_ATTRIBUTES};
 use crate::{
     pagetable::{DEVICE_ATTRIBUTES, MEMORY_ATTRIBUTES},
@@ -177,5 +178,14 @@ impl Platform for Qemu {
             .expect("failed to map shared heap");
 
         idmap
+    }
+
+    fn handle_hvc(function_id: u64, _args: [u64; 17]) -> HvcResult {
+        // Dummy HVC for testing
+        if function_id == 0xFF00_0000 {
+            return HvcResult::Handled(Ok(0x1234_5678_9ABC_DEF0.into()));
+        }
+
+        HvcResult::Unhandled
     }
 }

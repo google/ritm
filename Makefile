@@ -42,7 +42,7 @@ qemu: $(QEMU_BIN)
 	  -append "ritm.boot_mode=el1"
 
 test:
-	tests/isolation_test.py
+	tests/integration_test.py
 
 clean:
 	cargo clean

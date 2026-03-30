@@ -9,6 +9,7 @@
 #[cfg(platform = "qemu")]
 mod qemu;
 
+use crate::hvc_response::HvcResult;
 use aarch64_paging::idmap::IdMap;
 use aarch64_paging::paging::{PAGE_SIZE, Stage2};
 use dtoolkit::fdt::Fdt;
@@ -63,6 +64,16 @@ pub trait Platform {
     /// The page table should typically unmap the part of the memory where RITM resides, so that
     /// the guest cannot interact with it in any way.
     fn make_stage2_pagetable() -> IdMap<Stage2>;
+
+    /// Handles a custom HVC call.
+    ///
+    /// The default implementation returns `HvcResult::Unhandled`, indicating the call was not handled.
+    /// If handled, it should return the corresponding `HvcResult` which specifies how the registers
+    /// should be updated.
+    fn handle_hvc(function_id: u64, args: [u64; 17]) -> HvcResult {
+        let _ = (function_id, args);
+        HvcResult::Unhandled
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

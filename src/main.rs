@@ -14,6 +14,7 @@ extern crate alloc;
 mod arch;
 mod console;
 mod exceptions;
+mod hvc_response;
 mod hypervisor;
 mod logger;
 mod pagetable;

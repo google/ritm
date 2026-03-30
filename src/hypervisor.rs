@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::hvc_response::{HvcResponse, HvcResult};
 use crate::{
     arch,
     platform::{Platform, PlatformImpl},
@@ -210,17 +211,19 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
 
     match ec {
         ExceptionClass::HvcTrappedInAArch64 | ExceptionClass::SmcTrappedInAArch64 => {
-            let function_id = register_state.registers[0];
+            let [function_id, args @ .., _] = register_state.registers;
+            debug!("HVC/SMC call: function_id={function_id:#x}");
 
-            match function_id {
+            let result = match function_id {
                 0x8400_0000..=0x8400_001F | 0xC400_0000..=0xC400_001F => {
-                    try_handle_psci(&mut register_state)
-                        .expect("Unknown PSCI call: {register_state:?}");
+                    HvcResult::Handled(try_handle_psci(function_id, args[0], args[1], args[2]))
                 }
                 _ => {
-                    panic!("Unknown HVC/SMC call: function_id={function_id:x}; {register_state:?}");
+                    debug!("Forwarding HVC call to platform");
+                    PlatformImpl::handle_hvc(function_id, args)
                 }
-            }
+            };
+            result.modify_register_state(&mut register_state);
         }
         ExceptionClass::DataAbortLowerEL => {
             inject_data_abort(&mut register_state);
@@ -302,26 +305,26 @@ fn inject_data_abort(register_state: &mut RegisterStateRef) {
     regs.spsr = spsr.bits();
 }
 
-fn try_handle_psci(register_state: &mut RegisterStateRef) -> Result<(), arm_psci::Error> {
-    let [fn_id, arg0, arg1, arg2, ..] = register_state.registers;
+fn try_handle_psci(
+    fn_id: u64,
+    arg0: u64,
+    arg1: u64,
+    arg2: u64,
+) -> Result<HvcResponse, smccc::arch::Error> {
     debug!(
         "Forwarding the PSCI call: fn_id={fn_id:#x}, arg0={arg0:#x}, arg1={arg1:#x}, arg2={arg2:#x}"
     );
 
-    let out = handle_psci(fn_id, arg0, arg1, arg2)?;
-    debug!("PSCI call output: out={out:#x}");
+    let out = match handle_psci(fn_id, arg0, arg1, arg2) {
+        Ok(val) => Ok(HvcResponse::from(val)),
+        Err(error) => {
+            let error_code = arm_psci::ErrorCode::from(error);
+            Err(smccc::arch::Error::from(i32::from(error_code)))
+        }
+    };
+    debug!("PSCI call output: out={out:?}");
 
-    // SAFETY: This is an answer to the guest calling HVC/SMC, so it expects x0..3 will
-    // get overwritten.
-    unsafe {
-        let regs = register_state.get_mut();
-        regs.registers[0] = out;
-        regs.registers[1] = 0;
-        regs.registers[2] = 0;
-        regs.registers[3] = 0;
-    }
-
-    Ok(())
+    out
 }
 
 /// Handles a PSCI call.
