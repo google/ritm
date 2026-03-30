@@ -9,6 +9,7 @@
 #[cfg(platform = "qemu")]
 mod qemu;
 
+use crate::hvc_response::HvcResult;
 use aarch64_paging::idmap::IdMap;
 use aarch64_paging::paging::{PAGE_SIZE, Stage2};
 use dtoolkit::fdt::Fdt;
@@ -66,11 +67,12 @@ pub trait Platform {
 
     /// Handles a custom HVC call.
     ///
-    /// The default implementation returns `false`, indicating the call was not handled.
-    /// If handled, it should modify `register_state` as needed and return `true`.
-    fn handle_hvc(register_state: &mut aarch64_rt::RegisterStateRef) -> bool {
-        let _ = register_state;
-        false
+    /// The default implementation returns `HvcResult::Unhandled`, indicating the call was not handled.
+    /// If handled, it should return the corresponding `HvcResult` which specifies how the registers
+    /// should be updated.
+    fn handle_hvc(function_id: u64, args: [u64; 17]) -> HvcResult {
+        let _ = (function_id, args);
+        HvcResult::Unhandled
     }
 }
 
