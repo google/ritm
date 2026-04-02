@@ -11,11 +11,13 @@ TARGET := --target aarch64-unknown-none
 PAYLOAD ?= payload.bin
 
 QEMU_BIN := target/ritm.qemu.bin
+QEMU_BL33_BIN := target/ritm.qemu_bl33.bin
 QEMU_RUSTFLAGS := "--cfg platform=\"qemu\""
+QEMU_BL33_RUSTFLAGS := "--cfg platform=\"qemu_bl33\""
 
-.PHONY: all build.qemu clean clippy qemu test
+.PHONY: all build.qemu build.qemu_bl33 clean clippy qemu test
 
-all: $(QEMU_BIN)
+all: $(QEMU_BIN) $(QEMU_BL33_BIN)
 
 clippy:
 	RITM_PAYLOAD=/dev/null RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo clippy $(TARGET)
@@ -26,8 +28,14 @@ clippy-fix:
 build.qemu:
 	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo build $(TARGET)
 
+build.qemu_bl33:
+	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_BL33_RUSTFLAGS) cargo build $(TARGET)
+
 $(QEMU_BIN): build.qemu
 	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo objcopy $(TARGET) -- -O binary $@
+
+$(QEMU_BL33_BIN): build.qemu_bl33
+	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_BL33_RUSTFLAGS) cargo objcopy $(TARGET) -- -O binary $@
 
 qemu: $(QEMU_BIN)
 	qemu-system-aarch64 -machine virt,virtualization=on,gic-version=3 -cpu cortex-a57 -display none -kernel $< -s \
@@ -43,6 +51,7 @@ qemu: $(QEMU_BIN)
 
 test:
 	tests/integration_test.py
+	tests/psci_test.py
 
 clean:
 	cargo clean

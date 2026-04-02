@@ -16,11 +16,12 @@ use aarch64_paging::idmap::IdMap;
 use aarch64_paging::paging::Stage2;
 use aarch64_rt::{RegisterStateRef, Stack};
 use arm_sysregs::{
-    CnthctlEl2, CntvoffEl2, ElrEl1, ElrEl2, EsrEl1, FarEl1, HcrEl2, MpidrEl1, SpsrEl1, SpsrEl2,
-    VtcrEl2, read_cnthctl_el2, read_esr_el2, read_far_el2, read_hcr_el2, read_mpidr_el1,
-    read_spsr_el2, read_vbar_el1, write_cnthctl_el2, write_cntvoff_el2, write_elr_el1,
-    write_elr_el2, write_esr_el1, write_far_el1, write_hcr_el2, write_spsr_el1, write_spsr_el2,
-    write_vtcr_el2,
+    CnthctlEl2, CntvoffEl2, ElrEl1, ElrEl2, EsrEl1, FarEl1, HcrEl2, IccSreEl2, MairEl1, MpidrEl1,
+    SctlrEl1, SpEl1, SpsrEl1, SpsrEl2, TcrEl1, Ttbr0El1, VbarEl1, VtcrEl2, read_cnthctl_el2,
+    read_esr_el2, read_far_el2, read_icc_sre_el2, read_mpidr_el1, read_spsr_el2, read_vbar_el1,
+    write_cnthctl_el2, write_cntvoff_el2, write_elr_el1, write_elr_el2, write_esr_el1,
+    write_far_el1, write_hcr_el2, write_icc_sre_el2, write_mair_el1, write_sctlr_el1, write_sp_el1,
+    write_spsr_el1, write_spsr_el2, write_tcr_el1, write_ttbr0_el1, write_vbar_el1, write_vtcr_el2,
 };
 use core::arch::naked_asm;
 use log::debug;
@@ -46,7 +47,7 @@ const T0SZ_MAX_SIZE: u8 = 64;
 pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_point: u64) -> ! {
     setup_stage2();
     // Setup EL1
-    let mut hcr = read_hcr_el2();
+    let mut hcr = HcrEl2::empty();
     hcr |= HcrEl2::RW;
     hcr |= HcrEl2::TSC;
     hcr |= HcrEl2::VM;
@@ -64,6 +65,17 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
     cnthctl |= CnthctlEl2::EL0PCTEN;
     cnthctl |= CnthctlEl2::EL1PCEN;
     write_cnthctl_el2(cnthctl);
+
+    // Configure GIC acccess via system registers
+    let mut icc_sre = read_icc_sre_el2();
+    icc_sre |= IccSreEl2::SRE;
+    icc_sre |= IccSreEl2::DFB;
+    icc_sre |= IccSreEl2::DIB;
+    icc_sre |= IccSreEl2::ENABLE;
+    // SAFETY: Configuring GIC system register access for EL1.
+    unsafe {
+        write_icc_sre_el2(icc_sre);
+    }
 
     let mut spsr = read_spsr_el2();
     // Setup SPSR_EL2 to enter EL1h
@@ -84,6 +96,24 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
     // SAFETY: We trust the caller the entry point is valid.
     unsafe {
         write_elr_el2(elr);
+    }
+
+    // Reset EL1 registers in case the firmware set them to different values.
+    let mut sctlr = SctlrEl1::empty();
+    sctlr |= SctlrEl1::EOS;
+    sctlr |= SctlrEl1::TSCXT;
+    sctlr |= SctlrEl1::EIS;
+    sctlr |= SctlrEl1::SPAN;
+    sctlr |= SctlrEl1::NTLSMD;
+    sctlr |= SctlrEl1::LSMAOE;
+    // SAFETY: We reset the EL1 registers. The guest is not running yet.
+    unsafe {
+        write_ttbr0_el1(Ttbr0El1::empty());
+        write_tcr_el1(TcrEl1::empty());
+        write_vbar_el1(VbarEl1::empty());
+        write_mair_el1(MairEl1::empty());
+        write_sp_el1(SpEl1::empty());
+        write_sctlr_el1(sctlr);
     }
 
     // SAFETY: The caller ensures that the provided arguments are valid and that this is called
@@ -484,7 +514,6 @@ enum ExceptionClass {
     SmcTrappedInAArch64,
     /// Data Abort taken without a change in Exception Level.
     DataAbortLowerEL,
-    #[allow(unused)]
     /// Unknown exception class.
     Unknown(u8),
 }
