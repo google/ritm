@@ -8,14 +8,19 @@
 
 #[cfg(platform = "qemu")]
 mod qemu;
+#[cfg(platform = "qemu_bl33")]
+mod qemu_bl33;
 
 use crate::hvc_response::HvcResult;
 use aarch64_paging::idmap::IdMap;
 use aarch64_paging::paging::{PAGE_SIZE, Stage2};
 use dtoolkit::fdt::Fdt;
 use embedded_io::{Write, WriteReady};
+
 #[cfg(platform = "qemu")]
 pub use qemu::Qemu as PlatformImpl;
+#[cfg(platform = "qemu_bl33")]
+pub use qemu_bl33::Qemu as PlatformImpl;
 
 pub type ConsoleImpl = <PlatformImpl as Platform>::Console;
 
@@ -23,6 +28,7 @@ pub type ConsoleImpl = <PlatformImpl as Platform>::Console;
 ///
 /// This is 8 bytes, as Linux requires the device tree to be "placed on an 8-byte boundary":
 /// <https://docs.kernel.org/arch/arm64/booting.html#setup-the-device-tree>
+#[allow(dead_code)]
 pub const FDT_ALIGNMENT: usize = 8;
 
 /// Platform-specific code.
