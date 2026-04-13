@@ -24,8 +24,8 @@ CACHE_DIR = test_utils.PROJECT_ROOT / ".test_cache"
 TFA_DIR = CACHE_DIR / "trusted-firmware-a"
 RFA_DIR = CACHE_DIR / "rusted-firmware-a"
 
-TFA_REVISION = "8dae0862c502e08568a61a1050091fa9357f1240"
-RFA_REVISION = "47ebfc5caa5fc49924ff51868b696099f7f889b6"
+TFA_REVISION = "de387341ee73d99446fbbf6a7053d7b759b8b3a6"
+RFA_REVISION = "e485fdb91ce65c89c636828c5d45ae9fbb17db36"
 
 
 def main():
@@ -73,18 +73,6 @@ def clone_repos():
 
 
 def build_firmware(env):
-    # Patch RF-A to pass the Device Tree in x0
-    rfa_platform_file = RFA_DIR / "src" / "platform" / "qemu.rs"
-    with open(rfa_platform_file, "r") as f:
-        content = f.read()
-
-    old_handover = 'EntryPointInfo {\n            pc: 0x6000_0000,\n            args: Default::default(),\n        }'
-    new_handover = 'EntryPointInfo {\n            pc: 0x6000_0000,\n            args: [0x4000_0000, 0, 0, 0, 0, 0, 0, 0],\n        }'
-    if old_handover in content:
-        content = content.replace(old_handover, new_handover)
-        with open(rfa_platform_file, "w") as f:
-            f.write(content)
-
     rfa_env = env.copy()
     rfa_env["TFA"] = str(TFA_DIR)
     rfa_env["CARGO"] = "cargo"
@@ -93,7 +81,6 @@ def build_firmware(env):
     test_utils.run_command(
         [
             "make",
-            "-C", str(TFA_DIR),
             "PLAT=qemu",
             "DEBUG=1",
             "CC=clang",
@@ -102,7 +89,7 @@ def build_firmware(env):
             "NEED_BL31=no",
             "bl1", "bl2"
         ],
-        cwd=RFA_DIR,
+        cwd=TFA_DIR,
         env=rfa_env
     )
     test_utils.run_command(["make", "PLAT=qemu", "DEBUG=1", "CARGO=cargo", "all"], cwd=RFA_DIR, env=rfa_env)

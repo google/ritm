@@ -6,10 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[cfg(platform = "qemu")]
+#[cfg(any(platform = "qemu", platform = "qemu_bl33"))]
 mod qemu;
-#[cfg(platform = "qemu_bl33")]
-mod qemu_bl33;
 
 use crate::hvc_response::HvcResult;
 use aarch64_paging::idmap::IdMap;
@@ -17,10 +15,8 @@ use aarch64_paging::paging::{PAGE_SIZE, Stage2};
 use dtoolkit::fdt::Fdt;
 use embedded_io::{Write, WriteReady};
 
-#[cfg(platform = "qemu")]
+#[cfg(any(platform = "qemu", platform = "qemu_bl33"))]
 pub use qemu::Qemu as PlatformImpl;
-#[cfg(platform = "qemu_bl33")]
-pub use qemu_bl33::Qemu as PlatformImpl;
 
 pub type ConsoleImpl = <PlatformImpl as Platform>::Console;
 
