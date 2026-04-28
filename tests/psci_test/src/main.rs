@@ -17,6 +17,7 @@ use core::fmt::Write;
 use core::panic::PanicInfo;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicBool, Ordering};
+use percore::exception_free;
 use smccc::psci::SuspendMode;
 use smccc::{Hvc, psci};
 use spin::Lazy;
@@ -85,9 +86,6 @@ fn main(_arg0: u64, _arg1: u64, _arg2: u64, _arg3: u64) -> ! {
 
     test_standby();
     test_powerdown();
-
-    // PowerDown doesn't return here, it resumes via powerdown_resume.
-    unreachable!();
 }
 
 fn test_standby() {
@@ -123,7 +121,7 @@ extern "C" fn standby_unexpected_resume(_data: u64) -> ! {
     panic!("FAILED: Standby jumped to standby_unexpected_resume");
 }
 
-fn test_powerdown() {
+fn test_powerdown() -> ! {
     println!("Testing PowerDown...");
 
     let duration = read_cntfrq_el0().clockfreq() / 10; // 100ms
@@ -142,8 +140,9 @@ fn test_powerdown() {
 
     unsafe {
         aarch64_rt::suspend_core::<Hvc>(pstate, stack_ptr, powerdown_resume, 0)
-            .expect("FAILED: PowerDown cpu_suspend returned unexpectedly")
+            .expect("FAILED: PowerDown cpu_suspend returned unexpectedly");
     }
+    unreachable!("PowerDown suspend should never return")
 }
 
 extern "C" fn powerdown_resume(_data: u64) -> ! {
@@ -162,9 +161,13 @@ fn reset_irq_received() {
 }
 
 fn wait_for_irq() {
-    while !IRQ_RECEIVED.load(Ordering::SeqCst) {
-        core::hint::spin_loop();
-    }
+    while !exception_free(|_token| {
+        let received = IRQ_RECEIVED.load(Ordering::SeqCst);
+        if !received {
+            arm_gic::wfi();
+        }
+        received
+    }) {}
 }
 
 fn power_off() -> ! {

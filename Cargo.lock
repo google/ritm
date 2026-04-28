@@ -227,6 +227,7 @@ dependencies = [
  "arm-pl011-uart",
  "arm-psci",
  "arm-sysregs",
+ "percore",
  "smccc",
  "spin",
 ]

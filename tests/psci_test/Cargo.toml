@@ -10,5 +10,6 @@ arm-gic = "0.8"
 arm-pl011-uart = "0.5"
 arm-psci = "0.2"
 arm-sysregs = { version = "0.2", features = ["el1"] }
+percore = { version = "0.2", default-features = false }
 smccc = "0.2"
 spin = "0.10"
