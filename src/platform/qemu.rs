@@ -44,7 +44,7 @@ impl Qemu {
         // 1 GiB of device memory.
         idmap[0] = DEVICE_ATTRIBUTES.bits();
         // 1 GiB of normal memory.
-        idmap[1] = MEMORY_ATTRIBUTES.bits() | 0x4000_0000;
+        idmap[1] = MEMORY_ATTRIBUTES.bits() | 0x0e000000;
         // 1 GiB of DRAM.
         idmap[2] = DEVICE_ATTRIBUTES.bits() | 0x8000_0000;
         InitialPagetable(idmap)
