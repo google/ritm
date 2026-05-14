@@ -11,6 +11,8 @@ use std::fs;
 use std::path::Path;
 
 const PLATFORMS: [&str; 2] = ["qemu", "qemu_bl33"];
+const QEMU_PAYLOAD_SIZE_LIMIT: u64 = 64 * 1024 * 1024;
+const PAYLOAD_SECTION_ALIGNMENT: u64 = 4;
 
 fn main() {
     println!(
@@ -28,10 +30,10 @@ fn main() {
     println!("cargo:rustc-link-arg=-Tlinker/{platform}.ld");
     println!("cargo:rerun-if-changed=linker/{platform}.ld");
 
-    handle_payload();
+    handle_payload(&platform);
 }
 
-fn handle_payload() {
+fn handle_payload(platform: &str) {
     let payload_path_str = env::var("RITM_PAYLOAD").expect(
         "RITM_PAYLOAD environment variable not set. Please set it to the path of the kernel image.",
     );
@@ -57,6 +59,14 @@ fn handle_payload() {
     });
 
     let payload_size = metadata.len();
+    let payload_size_aligned = payload_size.next_multiple_of(PAYLOAD_SECTION_ALIGNMENT);
+    let payload_size_limit = payload_size_limit(platform);
+    assert!(
+        payload_size_aligned <= payload_size_limit,
+        "Payload '{}' is too large for platform {platform:?}: {payload_size} bytes ({payload_size_aligned} bytes after section alignment) exceeds the {payload_size_limit} byte payload region. Please reduce RITM_PAYLOAD or increase the payload memory region in linker/{platform}.ld.",
+        payload_canonical.display()
+    );
+
     let out_dir = env::var("OUT_DIR").expect("OUT_DIR is expected to be set in build.rs");
     let dest_path = Path::new(&out_dir).join("payload_constants.rs");
 
@@ -77,4 +87,11 @@ fn handle_payload() {
         "cargo:rustc-env=RITM_PAYLOAD_PATH={}",
         payload_canonical.display()
     );
+}
+
+fn payload_size_limit(platform: &str) -> u64 {
+    match platform {
+        "qemu" | "qemu_bl33" => QEMU_PAYLOAD_SIZE_LIMIT,
+        _ => unreachable!("platform was already validated"),
+    }
 }

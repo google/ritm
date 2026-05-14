@@ -229,7 +229,7 @@ dependencies = [
  "arm-sysregs",
  "percore",
  "smccc",
- "spin",
+ "spin 0.10.0",
 ]
 
 [[package]]
