@@ -41,7 +41,7 @@ use crate::{
     platform::{BootMode, Platform, PlatformImpl},
 };
 
-const LOG_LEVEL: LevelFilter = LevelFilter::Trace;
+const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
 const HEAP_SIZE: usize = 40 * PAGE_SIZE;
 static HEAP: SpinMutex<[u8; HEAP_SIZE]> = SpinMutex::new([0; HEAP_SIZE]);

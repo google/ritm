@@ -35,8 +35,7 @@ def main():
     test_utils.run_command(["make", "target/ritm.qemu_bl33.bin", f"PAYLOAD={PAYLOAD_BIN}"], cwd=test_utils.PROJECT_ROOT)
 
     os.makedirs(test_utils.PROJECT_ROOT / "target" / "qemu_run", exist_ok=True)
-    # shutil.copy(test_utils.PROJECT_ROOT / "target" / "ritm.qemu_bl33.bin", test_utils.PROJECT_ROOT / "target" / "qemu_run" / "bl32.bin")
-    shutil.copy(test_utils.PROJECT_ROOT / "target" / "ritm.qemu_bl33.bin", test_utils.PROJECT_ROOT / "target" / "qemu_run" / "bl32.bin")
+    shutil.copy(test_utils.PROJECT_ROOT / "target" / "ritm.qemu_bl33.bin", test_utils.PROJECT_ROOT / "target" / "qemu_run" / "bl33.bin")
 
     clone_repos()
     build_firmware(env)
@@ -100,9 +99,8 @@ def build_firmware(env):
     shutil.copy(TFA_DIR / "build" / "qemu" / "debug" / "bl1.bin", QEMU_DIR / "bl1.bin")
     shutil.copy(TFA_DIR / "build" / "qemu" / "debug" / "bl2.bin", QEMU_DIR / "bl2.bin")
     shutil.copy(RFA_DIR / "target" / "bl31.bin", QEMU_DIR / "bl31.bin")
-    # shutil.copy(RFA_DIR / "target" / "bl32.bin", QEMU_DIR / "bl32.bin")
-    # shutil.copy(test_utils.PROJECT_ROOT / "target" / "ritm.qemu_bl33.bin", QEMU_DIR / "bl32.bin")
-    shutil.copy(test_utils.PROJECT_ROOT / "target" / "ritm.qemu_bl33.bin", QEMU_DIR / "bl32.bin")
+    shutil.copy(RFA_DIR / "target" / "bl32.bin", QEMU_DIR / "bl32.bin")
+    shutil.copy(test_utils.PROJECT_ROOT / "target" / "ritm.qemu_bl33.bin", QEMU_DIR / "bl33.bin")
 
 
 if __name__ == "__main__":
