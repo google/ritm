@@ -32,11 +32,12 @@ bootloader flow of their devices.
 
 ## Building
 
-To build the project for QEMU, you need to provide the path to the kernel
-image payload (e.g., a Linux kernel `Image`).
+To build the project, select a platform and provide the path to the kernel image
+payload (e.g., a Linux kernel `Image`). If no platform is specified, QEMU is
+used.
 
 ```bash
-make build.qemu PAYLOAD=/path/to/your/linux/Image
+make build PLATFORM=qemu PAYLOAD=/path/to/your/linux/Image
 ```
 
 If you do not specify `PAYLOAD`, it defaults to looking for a file named
@@ -74,11 +75,34 @@ file and update its linker script. See `src/platform/qemu.rs` and
 
 ### How to add a new platform
 
-1. Implement the `Platform` trait (`src/platform.rs`) in a new module
-   to provide the console, early pagetable, and boot configuration.
-2. Conditionally export it via `#[cfg(platform = "...")]`.
-3. Provide a memory layout linker script in `linker/`.
-4. Register the new platform in `build.rs` and the `Makefile`.
+Add a Rust module under `src/platform/`. The file name is the platform name:
+`src/platform/my_board.rs` is selected with `make PLATFORM=my_board`. The
+build script discovers platform modules automatically, so no Makefile or
+`build.rs` module registration is required.
+
+The platform module must:
+
+1. Implement the `Platform` trait from `src/platform.rs`.
+2. Export the selected implementation as `PlatformImpl`.
+
+For example:
+
+```rust
+use super::{BootMode, Platform, PlatformParts};
+
+pub type PlatformImpl = MyBoard;
+
+pub struct MyBoard {
+    // Platform state.
+}
+
+impl Platform for MyBoard {
+    // Fill in the required platform hooks.
+}
+```
+
+Provide a memory layout linker script in `linker/` and register the platform
+payload size limit in `build.rs`.
 
 ## License
 

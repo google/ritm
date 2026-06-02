@@ -7,30 +7,77 @@
 // except according to those terms.
 
 use std::env;
+use std::fmt::Write as _;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-const PLATFORMS: [&str; 2] = ["qemu", "qemu_bl33"];
+const PLATFORM_DIR: &str = "src/platform";
 const QEMU_PAYLOAD_SIZE_LIMIT: u64 = 64 * 1024 * 1024;
 const PAYLOAD_SECTION_ALIGNMENT: u64 = 4;
 
 fn main() {
+    let platforms = discover_platforms();
     println!(
         "cargo::rustc-check-cfg=cfg(platform, values(\"{}\"))",
-        PLATFORMS.join("\", \"")
+        platforms.join("\", \"")
     );
+    println!("cargo:rerun-if-changed={PLATFORM_DIR}");
 
     let platform = env::var("CARGO_CFG_PLATFORM").expect("Missing platform name");
     assert!(
-        PLATFORMS.contains(&platform.as_str()),
-        "Unexpected platform name {platform:?}. Supported platforms: {PLATFORMS:?}",
+        platforms.iter().any(|known| known == &platform),
+        "Unexpected platform name {platform:?}. Supported platforms: {platforms:?}",
     );
+
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is expected to be set"));
+    let platform_module = out_dir.join("platform.rs");
+    fs::write(&platform_module, platform_module_source(&platforms))
+        .unwrap_or_else(|e| panic!("Failed to write '{}': {e}", platform_module.display()));
 
     println!("cargo:rustc-link-arg=-Timage.ld");
     println!("cargo:rustc-link-arg=-Tlinker/{platform}.ld");
     println!("cargo:rerun-if-changed=linker/{platform}.ld");
 
     handle_payload(&platform);
+}
+
+fn discover_platforms() -> Vec<String> {
+    let mut platforms = fs::read_dir(PLATFORM_DIR)
+        .unwrap_or_else(|e| panic!("Failed to read {PLATFORM_DIR}: {e}"))
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
+                return None;
+            }
+            Some(path.file_stem()?.to_str()?.to_owned())
+        })
+        .collect::<Vec<_>>();
+    platforms.sort();
+    platforms
+}
+
+fn platform_module_source(platforms: &[String]) -> String {
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR is expected");
+    let mut output = String::new();
+    for platform in platforms {
+        let path = Path::new(&manifest_dir)
+            .join(PLATFORM_DIR)
+            .join(format!("{platform}.rs"));
+        write!(
+            output,
+            r#"
+#[cfg(platform = "{platform}")]
+#[path = "{path}"]
+mod {platform};
+
+#[cfg(platform = "{platform}")]
+pub use {platform}::PlatformImpl;
+"#,
+            path = path.display()
+        )
+        .expect("writing to String should not fail");
+    }
+    output
 }
 
 fn handle_payload(platform: &str) {

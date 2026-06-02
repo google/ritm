@@ -28,6 +28,8 @@ use dtoolkit::{
 };
 use log::warn;
 
+pub type PlatformImpl = Qemu;
+
 /// Base address of the first PL011 UART.
 const UART_BASE_ADDRESS: *mut PL011Registers = 0x900_0000 as _;
 

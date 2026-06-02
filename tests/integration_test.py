@@ -35,12 +35,12 @@ def main():
 
     print("Building RITM with payload...")
     test_utils.run_command(
-        ["make", "build.qemu", f"PAYLOAD={PAYLOAD_BIN}"],
+        ["make", "build", "PLATFORM=qemu", f"PAYLOAD={PAYLOAD_BIN}"],
         cwd=test_utils.PROJECT_ROOT
     )
 
     print("Running QEMU integration test...")
-    cmd = ["make", "qemu", f"PAYLOAD={PAYLOAD_BIN}"]
+    cmd = ["make", "qemu", "PLATFORM=qemu", f"PAYLOAD={PAYLOAD_BIN}"]
 
     passed = test_utils.run_qemu_test(
         cmd=cmd,

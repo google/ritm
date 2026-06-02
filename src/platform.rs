@@ -6,17 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[cfg(any(platform = "qemu", platform = "qemu_bl33"))]
-mod qemu;
-
 use crate::hvc_response::HvcResult;
 use aarch64_paging::idmap::IdMap;
 use aarch64_paging::paging::{PAGE_SIZE, Stage2};
 use dtoolkit::fdt::Fdt;
 use embedded_io::{Write, WriteReady};
 
-#[cfg(any(platform = "qemu", platform = "qemu_bl33"))]
-pub use qemu::Qemu as PlatformImpl;
+include!(concat!(env!("OUT_DIR"), "/platform.rs"));
 
 pub type ConsoleImpl = <PlatformImpl as Platform>::Console;
 

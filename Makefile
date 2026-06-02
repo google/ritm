@@ -7,37 +7,31 @@
 # except according to those terms.
 
 TARGET := --target aarch64-unknown-none
+PLATFORM ?= qemu
 
 PAYLOAD ?= payload.bin
 
-QEMU_BIN := target/ritm.qemu.bin
-QEMU_BL33_BIN := target/ritm.qemu_bl33.bin
-QEMU_RUSTFLAGS := "--cfg platform=\"qemu\""
-QEMU_BL33_RUSTFLAGS := "--cfg platform=\"qemu_bl33\""
+BIN := target/ritm.$(PLATFORM).bin
+RUSTFLAGS_PLATFORM := --cfg platform="$(PLATFORM)"
+BUILD_ENV := RUSTFLAGS='$(RUSTFLAGS_PLATFORM)'
 
-.PHONY: all build.qemu build.qemu_bl33 clean clippy qemu test
+.PHONY: all build clean clippy clippy-fix qemu test
 
-all: $(QEMU_BIN) $(QEMU_BL33_BIN)
+all: $(BIN)
 
 clippy:
-	RITM_PAYLOAD=/dev/null RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo clippy $(TARGET)
+	RITM_PAYLOAD=/dev/null $(BUILD_ENV) cargo clippy $(TARGET)
 
 clippy-fix:
-	RITM_PAYLOAD=/dev/null RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo clippy --fix $(TARGET)
+	RITM_PAYLOAD=/dev/null $(BUILD_ENV) cargo clippy --fix $(TARGET)
 
-build.qemu:
-	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo build $(TARGET)
+build:
+	RITM_PAYLOAD=$(PAYLOAD) $(BUILD_ENV) cargo build $(TARGET)
 
-build.qemu_bl33:
-	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_BL33_RUSTFLAGS) cargo build $(TARGET)
+$(BIN): build
+	RITM_PAYLOAD=$(PAYLOAD) $(BUILD_ENV) cargo objcopy $(TARGET) -- -O binary $@
 
-$(QEMU_BIN): build.qemu
-	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo objcopy $(TARGET) -- -O binary $@
-
-$(QEMU_BL33_BIN): build.qemu_bl33
-	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_BL33_RUSTFLAGS) cargo objcopy $(TARGET) -- -O binary $@
-
-qemu: $(QEMU_BIN)
+qemu: $(BIN)
 	qemu-system-aarch64 -machine virt,virtualization=on,gic-version=3 -cpu cortex-a57 -display none -kernel $< -s \
 	  -smp 4 -serial mon:stdio \
 	  -global virtio-mmio.force-legacy=false \
