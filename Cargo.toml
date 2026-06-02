@@ -27,7 +27,7 @@ embedded-io = "0.7"
 log = "0.4"
 percore = "0.2"
 smccc = "0.2"
-spin = { version = "0.10", features = ["lazy", "once", "spin_mutex"], default-features = false }
+spin = { version = "0.12", features = ["lazy", "once", "spin_mutex"], default-features = false }
 
 [lints.rust]
 deprecated-safe = "warn"
