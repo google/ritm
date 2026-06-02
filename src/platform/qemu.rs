@@ -37,7 +37,8 @@ const UART_BASE_ADDRESS: *mut PL011Registers = 0x900_0000 as _;
 
 const DRAM_START: usize = 0x4000_0000;
 const DEFAULT_FDT_ADDRESS: u64 = DRAM_START as u64;
-const RITM_END: usize = RITM_IMAGE_ADDRESS + 4 * 1024 * 1024;
+const RITM_START: usize = RITM_IMAGE_ADDRESS;
+const RITM_END: usize = RITM_START + 4 * 1024 * 1024;
 
 pub struct Qemu {
     parts: Option<PlatformParts<Uart<'static>>>,
@@ -74,6 +75,31 @@ impl Qemu {
         }
 
         None
+    }
+
+    fn dram_range(fdt: &Fdt) -> (usize, usize) {
+        let memory_node_name = alloc::format!("memory@{DRAM_START:x}");
+        let memory = fdt
+            .root()
+            .child(&memory_node_name)
+            .expect("memory node not found");
+        let mut regs = memory
+            .reg()
+            .expect("memory reg property should be valid")
+            .expect("memory node should have a reg property");
+        let reg = regs
+            .next()
+            .expect("memory node should have at least one range");
+        let start: u64 = reg.address().expect("memory address should fit in u64");
+        let size: u64 = reg.size().expect("memory size should fit in u64");
+        (
+            start
+                .try_into()
+                .expect("memory address should fit in usize"),
+            (start + size)
+                .try_into()
+                .expect("memory end should fit in usize"),
+        )
     }
 }
 
@@ -122,21 +148,33 @@ impl Platform for Qemu {
     }
 
     fn modify_dt(&self, fdt: Fdt<'static>) -> Fdt<'static> {
+        let (dram_start, dram_end) = Self::dram_range(&fdt);
         let mut dt = DeviceTree::from_fdt(&fdt).expect("expected FDT to be valid");
+        let memory_node_name = alloc::format!("memory@{DRAM_START:x}");
 
         // Modify the Device Tree to reserve the memory used by RITM, so that the operating system
         // will not try to use it.
-        // See `linker/qemu.ld` for the address reference.
-        let mut res = Vec::<u8>::new();
-        res.extend_from_slice(&0x4040_0000u64.to_be_bytes());
-        res.extend_from_slice(&(124u64 * 1024 * 1024).to_be_bytes()); // 128 MiB default - 4 MiB reserved
+        // See `RITM_IMAGE_ADDRESS` for the address reference.
+        let mut lower_memory = Vec::<u8>::new();
+        lower_memory.extend_from_slice(&(dram_start as u64).to_be_bytes());
+        lower_memory.extend_from_slice(&((RITM_START - dram_start) as u64).to_be_bytes());
+
+        let mut upper_memory = Vec::<u8>::new();
+        upper_memory.extend_from_slice(&(RITM_END as u64).to_be_bytes());
+        upper_memory.extend_from_slice(&((dram_end - RITM_END) as u64).to_be_bytes());
 
         dt.root
-            .remove_child("memory@40000000")
+            .remove_child(&memory_node_name)
             .expect("memory node not found");
         dt.root.add_child(
-            DeviceTreeNode::builder("memory@40400000")
-                .property(DeviceTreeProperty::new("reg", res))
+            DeviceTreeNode::builder(alloc::format!("memory@{dram_start:x}"))
+                .property(DeviceTreeProperty::new("reg", lower_memory))
+                .property(DeviceTreeProperty::new("device_type", b"memory\0"))
+                .build(),
+        );
+        dt.root.add_child(
+            DeviceTreeNode::builder(alloc::format!("memory@{RITM_END:x}"))
+                .property(DeviceTreeProperty::new("reg", upper_memory))
                 .property(DeviceTreeProperty::new("device_type", b"memory\0"))
                 .build(),
         );
@@ -160,13 +198,21 @@ impl Platform for Qemu {
 
         // Device memory
         idmap
-            .map_range(&MemoryRegion::new(0, 0x4000_0000), STAGE2_DEVICE_ATTRIBUTES)
+            .map_range(&MemoryRegion::new(0, DRAM_START), STAGE2_DEVICE_ATTRIBUTES)
             .expect("failed to map device memory");
 
-        // Normal memory
+        // Normal memory before the RITM image.
         idmap
             .map_range(
-                &MemoryRegion::new(RITM_END as usize, 0x1_0000_0000),
+                &MemoryRegion::new(DRAM_START, RITM_START),
+                STAGE2_MEMORY_ATTRIBUTES,
+            )
+            .expect("failed to map normal memory");
+
+        // Normal memory after the RITM image.
+        idmap
+            .map_range(
+                &MemoryRegion::new(RITM_END, 0x1_0000_0000),
                 STAGE2_MEMORY_ATTRIBUTES,
             )
             .expect("failed to map normal memory");
