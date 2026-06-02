@@ -20,8 +20,6 @@ jobs:
         with:
           toolchain: stable
           targets: aarch64-unknown-none
-      - name: Create dummy payload
-        run: dd if=/dev/zero of=payload.bin bs=1024 count=1024
       - name: Build for QEMU
         run: make build PLATFORM=qemu
       - name: Run clippy

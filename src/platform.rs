@@ -51,6 +51,9 @@ pub trait Platform {
     /// Returns the intended boot mode for current device configuration.
     fn boot_mode(&self, fdt: &Fdt) -> BootMode;
 
+    /// Returns the physical address where the payload is loaded.
+    fn payload_address(&self) -> u64;
+
     /// Modify the Device Tree if needed to adjust for the platform's needs. That might include
     /// reserving memory for RITM, or changing the PSCI method.
     fn modify_dt(&self, fdt: Fdt<'static>) -> Fdt<'static> {

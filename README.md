@@ -32,16 +32,18 @@ bootloader flow of their devices.
 
 ## Building
 
-To build the project, select a platform and provide the path to the kernel image
-payload (e.g., a Linux kernel `Image`). If no platform is specified, QEMU is
+Build the project by selecting a platform. If no platform is specified, QEMU is
 used.
 
 ```bash
-make build PLATFORM=qemu PAYLOAD=/path/to/your/linux/Image
+make PLATFORM=qemu
 ```
 
-If you do not specify `PAYLOAD`, it defaults to looking for a file named
-`payload.bin` in the root directory.
+To embed a payload image into the RITM binary, provide `PAYLOAD`:
+
+```bash
+make PLATFORM=qemu PAYLOAD=/path/to/your/linux/Image
+```
 
 ## Platforms
 
@@ -70,15 +72,14 @@ By default, the payload is booted in EL1.
 #### Modifying an existing platform
 
 Adjust device addresses, pagetables, or FDT logic in the platform's source
-file and update its linker script. See `src/platform/qemu.rs` and
-`linker/qemu.ld` for the reference example.
+file. See `src/platform/qemu.rs` for the reference example.
 
 ### How to add a new platform
 
 Add a Rust module under `src/platform/`. The file name is the platform name:
 `src/platform/my_board.rs` is selected with `make PLATFORM=my_board`. The
-build script discovers platform modules automatically, so no Makefile or
-`build.rs` module registration is required.
+build script discovers platform modules automatically, so no Makefile,
+`build.rs`, or linker script registration is required.
 
 The platform module must:
 
@@ -101,8 +102,30 @@ impl Platform for MyBoard {
 }
 ```
 
-Provide a memory layout linker script in `linker/` and register the platform
-payload size limit in `build.rs`.
+Add a matching key-value config file under `platforms/`:
+
+```text
+# Platform addresses.
+ritm_image_address=0x4700_0000
+payload_address=0x4020_0000
+```
+
+Build it with:
+
+```bash
+make PLATFORM=my_board
+```
+
+If the platform should support embedding a payload into the RITM binary, set
+`payload_address` in the config file and pass `PAYLOAD` at build time:
+
+```bash
+make PLATFORM=my_board PAYLOAD=/path/to/payload
+```
+
+When `PAYLOAD` is not set, the build does not require or embed a payload. When
+`PAYLOAD` is set, the build embeds the payload at `PAYLOAD_ADDRESS` and
+checks that it fits in the reserved payload window.
 
 ## License
 

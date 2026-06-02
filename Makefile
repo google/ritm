@@ -8,31 +8,37 @@
 
 TARGET := --target aarch64-unknown-none
 PLATFORM ?= qemu
-
-PAYLOAD ?= payload.bin
+PAYLOAD ?=
 
 BIN := target/ritm.$(PLATFORM).bin
+ELF := target/aarch64-unknown-none/debug/ritm
 RUSTFLAGS_PLATFORM := --cfg platform="$(PLATFORM)"
 BUILD_ENV := RUSTFLAGS='$(RUSTFLAGS_PLATFORM)'
+
+ifneq ($(strip $(PAYLOAD)),)
+BUILD_ENV += RITM_PAYLOAD='$(abspath $(PAYLOAD))'
+endif
 
 .PHONY: all build clean clippy clippy-fix qemu test
 
 all: $(BIN)
 
 clippy:
-	RITM_PAYLOAD=/dev/null $(BUILD_ENV) cargo clippy $(TARGET)
+	$(BUILD_ENV) cargo clippy $(TARGET)
 
 clippy-fix:
-	RITM_PAYLOAD=/dev/null $(BUILD_ENV) cargo clippy --fix $(TARGET)
+	$(BUILD_ENV) cargo clippy --fix $(TARGET)
 
 build:
-	RITM_PAYLOAD=$(PAYLOAD) $(BUILD_ENV) cargo build $(TARGET)
+	$(BUILD_ENV) cargo build $(TARGET)
 
 $(BIN): build
-	RITM_PAYLOAD=$(PAYLOAD) $(BUILD_ENV) cargo objcopy $(TARGET) -- -O binary $@
+	$(BUILD_ENV) cargo objcopy $(TARGET) -- -O binary $@
 
-qemu: $(BIN)
-	qemu-system-aarch64 -machine virt,virtualization=on,gic-version=3 -cpu cortex-a57 -display none -kernel $< -s \
+# RITM does not configure SVE or pointer authentication state for EL1 guests yet.
+qemu: build
+	@test -n "$(strip $(PAYLOAD))" || { echo "PAYLOAD is required for make qemu"; exit 2; }
+	qemu-system-aarch64 -machine virt,virtualization=on,gic-version=3 -cpu cortex-a57 -display none -net none -kernel $(ELF) -s \
 	  -smp 4 -serial mon:stdio \
 	  -global virtio-mmio.force-legacy=false \
 	  -drive file=/dev/null,if=none,format=raw,id=x0 \

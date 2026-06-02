@@ -21,12 +21,11 @@ mod pagetable;
 mod platform;
 mod simple_map;
 
-mod payload_constants {
-    include!(concat!(env!("OUT_DIR"), "/payload_constants.rs"));
-}
+include!(concat!(env!("OUT_DIR"), "/payload.rs"));
 
 use aarch64_paging::paging::PAGE_SIZE;
 use aarch64_rt::{entry, exception_handlers};
+use arm_sysregs::read_currentel;
 use buddy_system_allocator::{Heap, LockedHeap};
 use core::alloc::Layout;
 use core::arch::naked_asm;
@@ -55,13 +54,6 @@ static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
 /// Heap allocator for data that needs to be shared between RITM and the guest running in EL1.
 pub static SHARED_HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
 
-#[repr(align(0x200000))] // Linux requires 2MB alignment
-struct AlignImage<T>(T);
-
-#[unsafe(link_section = ".payload")]
-static NEXT_IMAGE: AlignImage<[u8; payload_constants::PAYLOAD_SIZE]> =
-    AlignImage(*payload_constants::PAYLOAD_DATA);
-
 exception_handlers!(Exceptions);
 entry!(main);
 
@@ -74,6 +66,7 @@ fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     logger::init(console, LOG_LEVEL).expect("failed to init logger");
 
     info!("starting ritm");
+    info!("current exception level: EL{}", read_currentel().el());
     info!("main({x0:#x}, {x1:#x}, {x2:#x}, {x3:#x})");
 
     // Give the allocator some memory to allocate.
@@ -98,13 +91,15 @@ fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     let dtb_ptr = new_fdt.data().as_ptr() as u64;
 
     let boot_mode = platform.boot_mode(&new_fdt);
+    let payload_address = platform.payload_address();
     info!("Booting in {boot_mode:?}");
+    info!("Payload address: {payload_address:#x}");
 
-    // SAFETY: We assume there's a valid executable at `NEXT_IMAGE`.
+    // SAFETY: We assume there's a valid executable at the platform payload address.
     unsafe {
         match boot_mode {
-            BootMode::El1 => run_payload_el1(dtb_ptr, x1, x2, x3),
-            BootMode::El2 => run_payload_el2(dtb_ptr, x1, x2, x3),
+            BootMode::El1 => run_payload_el1(payload_address, dtb_ptr, x1, x2, x3),
+            BootMode::El2 => run_payload_el2(payload_address, dtb_ptr, x1, x2, x3),
         }
     }
 }
@@ -122,22 +117,22 @@ fn add_to_heap<const ORDER: usize>(heap: &mut Heap<ORDER>, range: &'static mut [
 ///
 /// # Safety
 ///
-/// `NEXT_IMAGE` must point to a valid executable piece of code which never returns.
+/// `entry_point` must point to a valid executable piece of code which never returns.
 #[unsafe(naked)]
-unsafe extern "C" fn run_payload_el2(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
+unsafe extern "C" fn run_payload_el2(entry_point: u64, x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     naked_asm!(
         "mov x19, x0",
         "mov x20, x1",
         "mov x21, x2",
         "mov x22, x3",
+        "mov x23, x4",
         "bl {disable_mmu_and_caches}",
-        "mov x0, x19",
-        "mov x1, x20",
-        "mov x2, x21",
-        "mov x3, x22",
-        "b {next_image}",
+        "mov x0, x20",
+        "mov x1, x21",
+        "mov x2, x22",
+        "mov x3, x23",
+        "br x19",
         disable_mmu_and_caches = sym disable_mmu_and_caches,
-        next_image = sym NEXT_IMAGE,
     );
 }
 
@@ -145,11 +140,11 @@ unsafe extern "C" fn run_payload_el2(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
 ///
 /// # Safety
 ///
-/// `NEXT_IMAGE` must point to a valid executable piece of code which never returns.
-unsafe fn run_payload_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
-    // SAFETY: The caller guarantees that `NEXT_IMAGE` points to a valid executable piece of code which never returns.
+/// `entry_point` must point to a valid executable piece of code which never returns.
+unsafe fn run_payload_el1(entry_point: u64, x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
+    // SAFETY: The caller guarantees that `entry_point` points to a valid executable piece of code which never returns.
     unsafe {
-        hypervisor::entry_point_el1(x0, x1, x2, x3, &raw const NEXT_IMAGE.0 as u64);
+        hypervisor::entry_point_el1(x0, x1, x2, x3, entry_point);
     }
 }
 

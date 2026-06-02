@@ -7,7 +7,7 @@
 // except according to those terms.
 
 /// The QEMU aarch64 virt platform.
-use super::{FDT_ALIGNMENT, Platform, PlatformParts};
+use super::{Platform, PlatformParts, FDT_ALIGNMENT};
 use crate::hvc_response::HvcResult;
 use crate::pagetable::{STAGE2_DEVICE_ATTRIBUTES, STAGE2_MEMORY_ATTRIBUTES};
 use crate::{
@@ -22,18 +22,20 @@ use arm_pl011_uart::{Interrupts, PL011Registers, Uart, UniqueMmioPointer};
 use core::alloc::Layout;
 use core::ptr::NonNull;
 use dtoolkit::{
-    Node, Property,
     fdt::Fdt,
     model::{DeviceTree, DeviceTreeNode, DeviceTreeProperty},
+    Node, Property,
 };
 use log::warn;
+
+use crate::platform::{PAYLOAD_ADDRESS, RITM_IMAGE_ADDRESS};
 
 pub type PlatformImpl = Qemu;
 
 /// Base address of the first PL011 UART.
 const UART_BASE_ADDRESS: *mut PL011Registers = 0x900_0000 as _;
 
-const RITM_END: *const u8 = (&raw const crate::NEXT_IMAGE).cast::<u8>();
+const RITM_END: usize = RITM_IMAGE_ADDRESS + 4 * 1024 * 1024;
 
 pub struct Qemu {
     parts: Option<PlatformParts<Uart<'static>>>,
@@ -101,6 +103,10 @@ impl Platform for Qemu {
 
     fn boot_mode(&self, fdt: &Fdt) -> BootMode {
         Self::read_boot_mode_from_cmd(fdt).unwrap_or(BootMode::El1)
+    }
+
+    fn payload_address(&self) -> u64 {
+        PAYLOAD_ADDRESS
     }
 
     fn modify_dt(&self, fdt: Fdt<'static>) -> Fdt<'static> {
