@@ -69,7 +69,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1af5a01adeeade54c9f5060300227a8ee64c05b6376f28e9b8ee3b72dd2056f"
 dependencies = [
- "spin",
+ "spin 0.10.0",
 ]
 
 [[package]]
@@ -136,7 +136,7 @@ dependencies = [
  "arm-pl011-uart",
  "arm-sysregs",
  "smccc",
- "spin",
+ "spin 0.12.0",
 ]
 
 [[package]]
@@ -220,7 +220,7 @@ dependencies = [
  "log",
  "percore",
  "smccc",
- "spin",
+ "spin 0.12.0",
 ]
 
 [[package]]
@@ -252,6 +252,12 @@ name = "spin"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
+
+[[package]]
+name = "spin"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1527984ca054dfca79333baec451042863f485fbee01b7bf6d911de915cac865"
 
 [[package]]
 name = "syn"
