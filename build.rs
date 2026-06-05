@@ -10,7 +10,7 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
-const PLATFORMS: [&str; 1] = ["qemu"];
+const PLATFORMS: [&str; 2] = ["qemu", "qemu_bl33"];
 
 fn main() {
     println!(

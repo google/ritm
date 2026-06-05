@@ -1,2 +1,8 @@
 /target
 payload.bin
+.test_cache/
+target/qemu_run/
+
+# Python bytecode cache
+__pycache__/
+*.pyc

@@ -31,7 +31,7 @@ use log::warn;
 /// Base address of the first PL011 UART.
 const UART_BASE_ADDRESS: *mut PL011Registers = 0x900_0000 as _;
 
-const RITM_END: usize = 0x4040_0000;
+const RITM_END: *const u8 = (&raw const crate::NEXT_IMAGE).cast::<u8>();
 
 pub struct Qemu {
     parts: Option<PlatformParts<Uart<'static>>>,
@@ -146,7 +146,7 @@ impl Platform for Qemu {
         // Normal memory
         idmap
             .map_range(
-                &MemoryRegion::new(RITM_END, 0x1_0000_0000),
+                &MemoryRegion::new(RITM_END as usize, 0x1_0000_0000),
                 STAGE2_MEMORY_ATTRIBUTES,
             )
             .expect("failed to map normal memory");

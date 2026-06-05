@@ -2,6 +2,7 @@
 members = [
     ".",
     "tests/integration_test",
+    "tests/psci_test",
 ]
 
 [package]
