@@ -35,6 +35,8 @@ pub type PlatformImpl = Qemu;
 /// Base address of the first PL011 UART.
 const UART_BASE_ADDRESS: *mut PL011Registers = 0x900_0000 as _;
 
+const DRAM_START: usize = 0x4000_0000;
+const DEFAULT_FDT_ADDRESS: u64 = DRAM_START as u64;
 const RITM_END: usize = RITM_IMAGE_ADDRESS + 4 * 1024 * 1024;
 
 pub struct Qemu {
@@ -107,6 +109,16 @@ impl Platform for Qemu {
 
     fn payload_address(&self) -> u64 {
         PAYLOAD_ADDRESS
+    }
+
+    fn fdt_address(&self, boot_fdt_address: u64) -> u64 {
+        if boot_fdt_address == 0 {
+            // QEMU doesn't populate x0 when booting the RITM ELF with -kernel.
+            warn!("No FDT address was passed in x0; falling back to QEMU virt default FDT address");
+            DEFAULT_FDT_ADDRESS
+        } else {
+            boot_fdt_address
+        }
     }
 
     fn modify_dt(&self, fdt: Fdt<'static>) -> Fdt<'static> {

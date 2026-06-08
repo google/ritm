@@ -81,7 +81,7 @@ fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
             .as_mut_slice(),
     );
 
-    let fdt_address = x0 as *const u8;
+    let fdt_address = platform.fdt_address(x0) as *const u8;
     // SAFETY: We trust that the FDT pointer we were given is valid, and this is the only time we
     // use it.
     let fdt: Fdt<'_> =

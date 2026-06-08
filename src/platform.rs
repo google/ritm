@@ -54,6 +54,11 @@ pub trait Platform {
     /// Returns the physical address where the payload is loaded.
     fn payload_address(&self) -> u64;
 
+    /// Returns the physical address of the FDT.
+    fn fdt_address(&self, boot_fdt_address: u64) -> u64 {
+        boot_fdt_address
+    }
+
     /// Modify the Device Tree if needed to adjust for the platform's needs. That might include
     /// reserving memory for RITM, or changing the PSCI method.
     fn modify_dt(&self, fdt: Fdt<'static>) -> Fdt<'static> {
