@@ -6,16 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[cfg(platform = "qemu")]
-mod qemu;
-
 use crate::hvc_response::HvcResult;
 use aarch64_paging::idmap::IdMap;
 use aarch64_paging::paging::{PAGE_SIZE, Stage2};
 use dtoolkit::fdt::Fdt;
 use embedded_io::{Write, WriteReady};
-#[cfg(platform = "qemu")]
-pub use qemu::Qemu as PlatformImpl;
+
+include!(concat!(env!("OUT_DIR"), "/platform.rs"));
 
 pub type ConsoleImpl = <PlatformImpl as Platform>::Console;
 
@@ -23,6 +20,7 @@ pub type ConsoleImpl = <PlatformImpl as Platform>::Console;
 ///
 /// This is 8 bytes, as Linux requires the device tree to be "placed on an 8-byte boundary":
 /// <https://docs.kernel.org/arch/arm64/booting.html#setup-the-device-tree>
+#[allow(dead_code)]
 pub const FDT_ALIGNMENT: usize = 8;
 
 /// Platform-specific code.
@@ -52,6 +50,14 @@ pub trait Platform {
 
     /// Returns the intended boot mode for current device configuration.
     fn boot_mode(&self, fdt: &Fdt) -> BootMode;
+
+    /// Returns the physical address where the payload is loaded.
+    fn payload_address(&self) -> u64;
+
+    /// Returns the physical address of the FDT.
+    fn fdt_address(&self, boot_fdt_address: u64) -> u64 {
+        boot_fdt_address
+    }
 
     /// Modify the Device Tree if needed to adjust for the platform's needs. That might include
     /// reserving memory for RITM, or changing the PSCI method.

@@ -21,8 +21,12 @@ use smccc::{Hvc, hvc64, psci};
 use spin::Once;
 use spin::mutex::{SpinMutex, SpinMutexGuard};
 
+mod platform_constants {
+    include!(concat!(env!("OUT_DIR"), "/platform_constants.rs"));
+}
+
 const UART_BASE: usize = 0x0900_0000;
-const RITM_BASE: usize = 0x4000_0000;
+const RITM_BASE: usize = platform_constants::RITM_IMAGE_ADDRESS;
 
 exception_handlers!(Exceptions);
 entry!(main);
