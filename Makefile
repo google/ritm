@@ -12,11 +12,11 @@ PAYLOAD ?=
 
 BIN := target/ritm.$(PLATFORM).bin
 ELF := target/aarch64-unknown-none/debug/ritm
-RUSTFLAGS_PLATFORM := --cfg platform="$(PLATFORM)"
-BUILD_ENV := RUSTFLAGS='$(RUSTFLAGS_PLATFORM)'
+PLATFORM_BUILD_ENV = RUSTFLAGS='--cfg platform="$(1)"'
+BUILD_ENV = $(call PLATFORM_BUILD_ENV,$(PLATFORM))
 
 ifneq ($(strip $(PAYLOAD)),)
-BUILD_ENV += RITM_PAYLOAD='$(abspath $(PAYLOAD))'
+PLATFORM_BUILD_ENV += RITM_PAYLOAD='$(abspath $(PAYLOAD))'
 endif
 
 .PHONY: all build clean clippy clippy-fix qemu test
@@ -32,8 +32,9 @@ clippy-fix:
 build:
 	$(BUILD_ENV) cargo build $(TARGET)
 
-$(BIN): build
-	$(BUILD_ENV) cargo objcopy $(TARGET) -- -O binary $@
+target/ritm.%.bin:
+	$(call PLATFORM_BUILD_ENV,$*) cargo build $(TARGET)
+	$(call PLATFORM_BUILD_ENV,$*) cargo objcopy $(TARGET) -- -O binary $@
 
 # RITM does not configure SVE or pointer authentication state for EL1 guests yet.
 qemu: build
