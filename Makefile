@@ -7,38 +7,38 @@
 # except according to those terms.
 
 TARGET := --target aarch64-unknown-none
+PLATFORM ?= qemu
+PAYLOAD ?=
 
-PAYLOAD ?= payload.bin
+BIN := target/ritm.$(PLATFORM).bin
+ELF := target/aarch64-unknown-none/debug/ritm
+RUSTFLAGS_PLATFORM := --cfg platform="$(PLATFORM)"
+BUILD_ENV := RUSTFLAGS='$(RUSTFLAGS_PLATFORM)'
 
-QEMU_BIN := target/ritm.qemu.bin
-QEMU_BL33_BIN := target/ritm.qemu_bl33.bin
-QEMU_RUSTFLAGS := "--cfg platform=\"qemu\""
-QEMU_BL33_RUSTFLAGS := "--cfg platform=\"qemu_bl33\""
+ifneq ($(strip $(PAYLOAD)),)
+BUILD_ENV += RITM_PAYLOAD='$(abspath $(PAYLOAD))'
+endif
 
-.PHONY: all build.qemu build.qemu_bl33 clean clippy qemu test
+.PHONY: all build clean clippy clippy-fix qemu test
 
-all: $(QEMU_BIN) $(QEMU_BL33_BIN)
+all: $(BIN)
 
 clippy:
-	RITM_PAYLOAD=/dev/null RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo clippy $(TARGET)
+	$(BUILD_ENV) cargo clippy $(TARGET)
 
 clippy-fix:
-	RITM_PAYLOAD=/dev/null RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo clippy --fix $(TARGET)
+	$(BUILD_ENV) cargo clippy --fix $(TARGET)
 
-build.qemu:
-	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo build $(TARGET)
+build:
+	$(BUILD_ENV) cargo build $(TARGET)
 
-build.qemu_bl33:
-	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_BL33_RUSTFLAGS) cargo build $(TARGET)
+$(BIN): build
+	$(BUILD_ENV) cargo objcopy $(TARGET) -- -O binary $@
 
-$(QEMU_BIN): build.qemu
-	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_RUSTFLAGS) cargo objcopy $(TARGET) -- -O binary $@
-
-$(QEMU_BL33_BIN): build.qemu_bl33
-	RITM_PAYLOAD=$(PAYLOAD) RUSTFLAGS=$(QEMU_BL33_RUSTFLAGS) cargo objcopy $(TARGET) -- -O binary $@
-
-qemu: $(QEMU_BIN)
-	qemu-system-aarch64 -machine virt,virtualization=on,gic-version=3 -cpu cortex-a57 -display none -kernel $< -s \
+# RITM does not configure SVE or pointer authentication state for EL1 guests yet.
+qemu: build
+	@test -n "$(strip $(PAYLOAD))" || { echo "PAYLOAD is required for make qemu"; exit 2; }
+	qemu-system-aarch64 -machine virt,virtualization=on,gic-version=3 -cpu cortex-a57 -display none -net none -kernel $(ELF) -s \
 	  -smp 4 -serial mon:stdio \
 	  -global virtio-mmio.force-legacy=false \
 	  -drive file=/dev/null,if=none,format=raw,id=x0 \

@@ -32,7 +32,7 @@ def main():
     env = os.environ.copy()
     test_utils.run_command(["cargo", "build", "--release", "--locked", "--target", "aarch64-unknown-none", "-p", "psci_test"], cwd=test_utils.PROJECT_ROOT, env=env)
     test_utils.run_command(["cargo", "objcopy", "--target", "aarch64-unknown-none", "-p", "psci_test", "--", "-O", "binary", str(PAYLOAD_BIN)], cwd=test_utils.PROJECT_ROOT)
-    test_utils.run_command(["make", "target/ritm.qemu_bl33.bin", f"PAYLOAD={PAYLOAD_BIN}"], cwd=test_utils.PROJECT_ROOT)
+    test_utils.run_command(["make", "target/ritm.qemu_bl33.bin", "PLATFORM=qemu_bl33", f"PAYLOAD={PAYLOAD_BIN}"], cwd=test_utils.PROJECT_ROOT)
 
     os.makedirs(test_utils.PROJECT_ROOT / "target" / "qemu_run", exist_ok=True)
     shutil.copy(test_utils.PROJECT_ROOT / "target" / "ritm.qemu_bl33.bin", test_utils.PROJECT_ROOT / "target" / "qemu_run" / "bl33.bin")
