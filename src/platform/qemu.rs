@@ -7,7 +7,7 @@
 // except according to those terms.
 
 /// The QEMU aarch64 virt platform.
-use super::{Platform, PlatformParts, FDT_ALIGNMENT};
+use super::{FDT_ALIGNMENT, Platform, PlatformParts};
 use crate::hvc_response::HvcResult;
 use crate::pagetable::{STAGE2_DEVICE_ATTRIBUTES, STAGE2_MEMORY_ATTRIBUTES};
 use crate::{
@@ -22,9 +22,9 @@ use arm_pl011_uart::{Interrupts, PL011Registers, Uart, UniqueMmioPointer};
 use core::alloc::Layout;
 use core::ptr::NonNull;
 use dtoolkit::{
+    Node, Property,
     fdt::Fdt,
     model::{DeviceTree, DeviceTreeNode, DeviceTreeProperty},
-    Node, Property,
 };
 use log::warn;
 
@@ -149,7 +149,7 @@ impl Platform for Qemu {
 
     fn modify_dt(&self, fdt: Fdt<'static>) -> Fdt<'static> {
         let (dram_start, dram_end) = Self::dram_range(&fdt);
-        let mut dt = DeviceTree::from_fdt(&fdt).expect("expected FDT to be valid");
+        let mut dt = DeviceTree::from_fdt(&fdt);
         let memory_node_name = alloc::format!("memory@{DRAM_START:x}");
 
         // Modify the Device Tree to reserve the memory used by RITM, so that the operating system
@@ -168,14 +168,28 @@ impl Platform for Qemu {
             .expect("memory node not found");
         dt.root.add_child(
             DeviceTreeNode::builder(alloc::format!("memory@{dram_start:x}"))
-                .property(DeviceTreeProperty::new("reg", lower_memory))
-                .property(DeviceTreeProperty::new("device_type", b"memory\0"))
+                .expect("valid node name")
+                .property(
+                    DeviceTreeProperty::new("reg", lower_memory)
+                        .expect("fixed property name should be valid"),
+                )
+                .property(
+                    DeviceTreeProperty::new("device_type", b"memory\0")
+                        .expect("fixed property name should be valid"),
+                )
                 .build(),
         );
         dt.root.add_child(
             DeviceTreeNode::builder(alloc::format!("memory@{RITM_END:x}"))
-                .property(DeviceTreeProperty::new("reg", upper_memory))
-                .property(DeviceTreeProperty::new("device_type", b"memory\0"))
+                .expect("valid node name")
+                .property(
+                    DeviceTreeProperty::new("reg", upper_memory)
+                        .expect("fixed property name should be valid"),
+                )
+                .property(
+                    DeviceTreeProperty::new("device_type", b"memory\0")
+                        .expect("fixed property name should be valid"),
+                )
                 .build(),
         );
 
