@@ -26,6 +26,15 @@ mod platform_constants {
 }
 
 const UART_BASE: usize = 0x0900_0000;
+const FILTERED_MMIO_BASE: usize = 0x0f00_0000;
+const FILTERED_MMIO_READ_VALUE: u64 = 0xfeed_face_cafe_beef;
+const FILTERED_MMIO_WRITE_VALUE: u64 = 0x1234_5678_9abc_def0;
+const FILTERED_MMIO_COUNTER_OFFSET: usize = 16;
+const FILTERED_MMIO_OFFSET_VALUES: [(usize, u64); 3] = [
+    (24, 0x1111_2222_3333_4444),
+    (32, 0x5555_6666_7777_8888),
+    (40, 0x9999_aaaa_bbbb_cccc),
+];
 const RITM_BASE: usize = platform_constants::RITM_IMAGE_ADDRESS;
 
 exception_handlers!(Exceptions);
@@ -49,6 +58,9 @@ fn main(_arg0: u64, _arg1: u64, _arg2: u64, _arg3: u64) -> ! {
     test_psci();
     test_dummy_hvc();
     test_unknown_hvc();
+    test_mmio_handler();
+    test_mmio_handler_counter();
+    test_mmio_handler_offsets();
     test_memory_isolation();
 
     writeln!(get_uart(), "TEST: All tests passed!").unwrap();
@@ -77,6 +89,101 @@ fn test_unknown_hvc() {
     writeln!(get_uart(), "TEST: Attempting an unknown HVC call...").unwrap();
     let [res, ..] = hvc64(0xFF00_0001, [0; 17]);
     writeln!(get_uart(), "TEST: Unknown HVC handled (returned {res:#x})",).unwrap();
+}
+
+fn test_mmio_handler() {
+    writeln!(get_uart(), "TEST: Attempting filtered MMIO access...").unwrap();
+    let before = TRAP_COUNT.load(Ordering::SeqCst);
+
+    let mut value: u64;
+    unsafe {
+        asm!(
+            "ldr x0, [x1]",
+            in("x1") FILTERED_MMIO_BASE,
+            lateout("x0") value,
+            options(nostack, readonly),
+        );
+    }
+    if value != FILTERED_MMIO_READ_VALUE {
+        panic!("Filtered MMIO read returned {:#x}", value);
+    }
+
+    unsafe {
+        asm!(
+            "str x0, [x1]",
+            in("x0") FILTERED_MMIO_WRITE_VALUE,
+            in("x1") FILTERED_MMIO_BASE + 8,
+            options(nostack),
+        );
+    }
+
+    let after = TRAP_COUNT.load(Ordering::SeqCst);
+    if after != before {
+        panic!("Filtered MMIO access unexpectedly faulted");
+    }
+    writeln!(get_uart(), "TEST: Filtered MMIO access succeeded").unwrap();
+}
+
+fn test_mmio_handler_counter() {
+    writeln!(
+        get_uart(),
+        "TEST: Attempting filtered MMIO counter reads..."
+    )
+    .unwrap();
+    let before = TRAP_COUNT.load(Ordering::SeqCst);
+
+    for expected in 0..4 {
+        let mut value: u64;
+        unsafe {
+            asm!(
+                "ldr x0, [x1]",
+                in("x1") FILTERED_MMIO_BASE + FILTERED_MMIO_COUNTER_OFFSET,
+                lateout("x0") value,
+                options(nostack, readonly),
+            );
+        }
+        if value != expected {
+            panic!(
+                "Filtered MMIO counter read returned {:#x}, expected {:#x}",
+                value, expected
+            );
+        }
+    }
+
+    let after = TRAP_COUNT.load(Ordering::SeqCst);
+    if after != before {
+        panic!("Filtered MMIO counter access unexpectedly faulted");
+    }
+    writeln!(get_uart(), "TEST: Filtered MMIO counter reads succeeded").unwrap();
+}
+
+fn test_mmio_handler_offsets() {
+    writeln!(get_uart(), "TEST: Attempting filtered MMIO offset reads...").unwrap();
+    let before = TRAP_COUNT.load(Ordering::SeqCst);
+
+    for (offset, expected) in FILTERED_MMIO_OFFSET_VALUES {
+        let mut value: u64;
+        unsafe {
+            asm!(
+                "ldr x0, [x1]",
+                in("x1") FILTERED_MMIO_BASE + offset,
+                lateout("x0") value,
+                options(nostack, readonly),
+            );
+        }
+        if value != expected {
+            panic!(
+                "Filtered MMIO read at offset {:#x} returned {:#x}, expected {:#x}",
+                offset, value, expected
+            );
+        }
+    }
+
+    let after = TRAP_COUNT.load(Ordering::SeqCst);
+    if after != before {
+        panic!("Filtered MMIO offset access unexpectedly faulted");
+    }
+    writeln!(get_uart(), "TEST: Filtered MMIO offset reads succeeded").unwrap();
 }
 
 fn test_memory_isolation() {

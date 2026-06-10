@@ -20,6 +20,7 @@ categories = ["embedded", "no-std"]
 [dependencies]
 aarch64-paging = "0.12"
 aarch64-rt = { version = "0.4.3", features = ["el2", "exceptions", "initial-pagetable", "psci"], default-features = false }
+arrayvec = { version = "0.7", default-features = false }
 arm-pl011-uart = "0.5"
 arm-psci = "0.2"
 arm-sysregs = { version = "0.2", features = ["el1", "el2"] }
