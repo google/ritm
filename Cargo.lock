@@ -71,6 +71,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arrayvec"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
+
+[[package]]
 name = "bitflags"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -254,6 +260,7 @@ dependencies = [
  "arm-pl011-uart",
  "arm-psci",
  "arm-sysregs",
+ "arrayvec",
  "buddy_system_allocator",
  "dtoolkit",
  "embedded-io",

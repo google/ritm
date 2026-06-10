@@ -20,6 +20,7 @@ mod logger;
 mod pagetable;
 mod platform;
 mod simple_map;
+mod stage2;
 
 include!(concat!(env!("OUT_DIR"), "/payload.rs"));
 
