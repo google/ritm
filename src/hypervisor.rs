@@ -9,6 +9,7 @@
 use crate::hvc_response::{HvcResponse, HvcResult};
 use crate::{
     arch,
+    exceptions::GuestRegisterStateRef,
     platform::{Platform, PlatformImpl},
     simple_map::SimpleMap,
     stage2::{
@@ -16,7 +17,7 @@ use crate::{
         Stage2Config,
     },
 };
-use aarch64_rt::{RegisterStateRef, Stack};
+use aarch64_rt::Stack;
 use arm_sysregs::{
     CnthctlEl2, CntvoffEl2, ElrEl1, ElrEl2, EsrEl1, FarEl1, HcrEl2, IccSreEl2, MairEl1, MpidrEl1,
     SctlrEl1, SpEl1, SpsrEl1, SpsrEl2, TcrEl1, Ttbr0El1, VbarEl1, VtcrEl2, read_cnthctl_el2,
@@ -249,14 +250,15 @@ pub unsafe extern "C" fn eret_to_el1(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {
     );
 }
 
-pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
+pub fn handle_sync_lower(mut register_state: GuestRegisterStateRef) {
     let esr_el2 = read_esr_el2();
     let ec = ExceptionClass::from(esr_el2.ec());
 
     match ec {
         ExceptionClass::HvcTrappedInAArch64 | ExceptionClass::SmcTrappedInAArch64 => {
-            let function_id = register_state.registers[0];
-            let args = &register_state.registers[1..=17];
+            let volatile_gprs = register_state.volatile_gprs();
+            let function_id = volatile_gprs[0];
+            let args = &volatile_gprs[1..=17];
             debug!("HVC/SMC call: function_id={function_id:#x}");
 
             let result = match function_id {
@@ -272,6 +274,7 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
         }
         ExceptionClass::DataAbortLowerEL => {
             if try_memory_access_handler(&mut register_state).is_err() {
+                debug!("Stage-2 MMIO emulation did not handle data abort; injecting guest fault");
                 inject_data_abort(&mut register_state);
             }
         }
@@ -304,17 +307,18 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
 
         // SAFETY: This is an answer to the guest calling SMC. The call needs to be skipped so that after returning
         // back to the guest, it will not be executed again.
-        let regs = unsafe { register_state.get_mut() };
-        regs.elr += AARCH64_INSTRUCTION_LENGTH;
+        unsafe {
+            register_state.advance_pc(AARCH64_INSTRUCTION_LENGTH);
+        }
     }
 }
 
-fn try_memory_access_handler(register_state: &mut RegisterStateRef) -> Result<(), ()> {
+fn try_memory_access_handler(register_state: &mut GuestRegisterStateRef) -> Result<(), ()> {
     let decoded = decode_memory_access(
         read_esr_el2().iss(),
         read_hpfar_el2().fipa(),
         read_far_el2().va(),
-        |index| read_saved_guest_register(register_state, index),
+        |index| register_state.read_gpr(index),
     )
     .ok_or(())?;
 
@@ -369,43 +373,23 @@ fn try_memory_access_handler(register_state: &mut RegisterStateRef) -> Result<()
     }
 }
 
-fn read_saved_guest_register(register_state: &RegisterStateRef, index: usize) -> Option<u64> {
-    match index {
-        0..=18 => Some(register_state.registers[index]),
-        29 => Some(register_state.fp),
-        30 => Some(register_state.sp),
-        31 => Some(0),
-        _ => None,
-    }
-}
-
 fn write_saved_guest_register(
-    register_state: &mut RegisterStateRef,
+    register_state: &mut GuestRegisterStateRef,
     index: usize,
     value: u64,
 ) -> bool {
-    // SAFETY: We only update the saved guest register targeted by the emulated load.
-    let regs = unsafe { register_state.get_mut() };
-    match index {
-        0..=18 => regs.registers[index] = value,
-        29 => regs.fp = value,
-        30 => regs.sp = value,
-        31 => {}
-        _ => return false,
-    }
-    true
+    register_state.write_gpr(index, value)
 }
 
-fn advance_guest_pc(register_state: &mut RegisterStateRef) {
-    // SAFETY: The MMIO access was emulated, so the guest should resume at the following instruction.
+fn advance_guest_pc(register_state: &mut GuestRegisterStateRef) {
+    // SAFETY: The memory access handler has emulated the trapped instruction, so guest execution can
+    // resume at the following instruction.
     unsafe {
-        register_state.get_mut().elr += AARCH64_INSTRUCTION_LENGTH;
+        register_state.advance_pc(AARCH64_INSTRUCTION_LENGTH);
     }
 }
 
-fn inject_data_abort(register_state: &mut RegisterStateRef) {
-    // SAFETY: We are modifying the saved register state to redirect execution.
-    let regs = unsafe { register_state.get_mut() };
+fn inject_data_abort(register_state: &mut GuestRegisterStateRef) {
     let fault_addr = read_far_el2();
     let esr = read_esr_el2();
 
@@ -420,10 +404,11 @@ fn inject_data_abort(register_state: &mut RegisterStateRef) {
     let handler = vbar + 0x200; // Current EL with SPx Sync
 
     // Save current context to guest EL1 regs
+    let (elr, spsr) = register_state.exception_return();
     // SAFETY: We are accessing EL1 system registers to inject exception.
     unsafe {
-        write_elr_el1(ElrEl1::from_bits_retain(regs.elr as u64));
-        write_spsr_el1(SpsrEl1::from_bits_retain(regs.spsr));
+        write_elr_el1(ElrEl1::from_bits_retain(elr as u64));
+        write_spsr_el1(SpsrEl1::from_bits_retain(spsr));
         write_far_el1(FarEl1::from_bits_retain(fault_addr.va()));
     }
     let mut guest_esr = EsrEl1::from_bits_retain(esr.bits());
@@ -433,14 +418,6 @@ fn inject_data_abort(register_state: &mut RegisterStateRef) {
     }
     write_esr_el1(guest_esr);
 
-    // Redirect execution
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "only 64-bit target is supported"
-    )]
-    {
-        regs.elr = handler as usize;
-    }
     // Mask all interrupts (DAIF) and set mode to EL1h
     let mut spsr = SpsrEl1::default();
     spsr.set_m_3_0(SPSR_EL1H);
@@ -448,7 +425,15 @@ fn inject_data_abort(register_state: &mut RegisterStateRef) {
     spsr |= SpsrEl1::A;
     spsr |= SpsrEl1::I;
     spsr |= SpsrEl1::F;
-    regs.spsr = spsr.bits();
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "only 64-bit target is supported"
+    )]
+    // SAFETY: `handler` points at the guest's current-EL synchronous exception vector and `spsr`
+    // describes the guest EL1h exception-entry state.
+    unsafe {
+        register_state.set_exception_return(handler as usize, spsr.bits());
+    }
 }
 
 fn try_handle_psci(
