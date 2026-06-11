@@ -17,6 +17,7 @@ mod exceptions;
 mod hvc_response;
 mod hypervisor;
 mod logger;
+mod memory_access;
 mod pagetable;
 mod platform;
 mod simple_map;

@@ -7,6 +7,7 @@
 # except according to those terms.
 
 TARGET := --target aarch64-unknown-none
+HOST_TARGET := $(shell rustc -vV | sed -n 's/^host: //p')
 PLATFORM ?= qemu
 PAYLOAD ?=
 
@@ -51,6 +52,7 @@ qemu: build
 	  -append "ritm.boot_mode=el1"
 
 test:
+	cargo test -p memory_access_test --target $(HOST_TARGET)
 	tests/integration_test.py
 	tests/psci_test.py
 
