@@ -14,13 +14,13 @@ use crate::{
     pagetable::{DEVICE_ATTRIBUTES, MEMORY_ATTRIBUTES},
     platform::BootMode,
 };
-use aarch64_paging::idmap::IdMap;
-use aarch64_paging::paging::{MemoryRegion, Stage2};
+use aarch64_paging::paging::PAGE_SIZE;
 use aarch64_rt::InitialPagetable;
 use alloc::vec::Vec;
 use arm_pl011_uart::{Interrupts, PL011Registers, Uart, UniqueMmioPointer};
 use core::alloc::Layout;
 use core::ptr::NonNull;
+use core::sync::atomic::{AtomicU64, Ordering};
 use dtoolkit::{
     Node, Property,
     fdt::Fdt,
@@ -29,6 +29,10 @@ use dtoolkit::{
 use log::warn;
 
 use crate::platform::{PAYLOAD_ADDRESS, RITM_IMAGE_ADDRESS};
+use crate::stage2::{
+    MemoryAccessHandler, MemoryAccessWidth, MemoryReadAccess, MemoryReadResult, MemoryWriteAccess,
+    MemoryWriteResult, Stage2Builder,
+};
 
 pub type PlatformImpl = Qemu;
 
@@ -37,8 +41,28 @@ const UART_BASE_ADDRESS: *mut PL011Registers = 0x900_0000 as _;
 
 const DRAM_START: usize = 0x4000_0000;
 const DEFAULT_FDT_ADDRESS: u64 = DRAM_START as u64;
+const FILTERED_MMIO_BASE: usize = 0x0f00_0000;
+const FILTERED_MMIO_PAGE_COUNT: usize = 1;
 const RITM_START: usize = RITM_IMAGE_ADDRESS;
 const RITM_END: usize = RITM_START + 4 * 1024 * 1024;
+
+static FILTERED_MMIO_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn to_pages(size: usize) -> usize {
+    size.div_ceil(PAGE_SIZE)
+}
+
+fn align_down_to_page(address: usize) -> usize {
+    address / PAGE_SIZE * PAGE_SIZE
+}
+
+fn align_up_to_page(address: usize) -> usize {
+    address.next_multiple_of(PAGE_SIZE)
+}
+
+fn to_ipa(address: usize) -> u64 {
+    u64::try_from(address).expect("IPA should fit in u64")
+}
 
 pub struct Qemu {
     parts: Option<PlatformParts<Uart<'static>>>,
@@ -100,6 +124,32 @@ impl Qemu {
                 .try_into()
                 .expect("memory end should fit in usize"),
         )
+    }
+
+    fn read_filtered_mmio(access: MemoryReadAccess) -> MemoryReadResult {
+        if access.width != MemoryAccessWidth::U64 {
+            return MemoryReadResult::Fault;
+        }
+
+        match access.offset {
+            0 => MemoryReadResult::Value(0xfeed_face_cafe_beef),
+            16 => MemoryReadResult::Value(FILTERED_MMIO_COUNTER.fetch_add(1, Ordering::SeqCst)),
+            24 => MemoryReadResult::Value(0x1111_2222_3333_4444),
+            32 => MemoryReadResult::Value(0x5555_6666_7777_8888),
+            40 => MemoryReadResult::Value(0x9999_aaaa_bbbb_cccc),
+            _ => MemoryReadResult::Fault,
+        }
+    }
+
+    fn write_filtered_mmio(access: MemoryWriteAccess) -> MemoryWriteResult {
+        if access.offset == 8
+            && access.width == MemoryAccessWidth::U64
+            && access.value == 0x1234_5678_9abc_def0
+        {
+            MemoryWriteResult::Handled
+        } else {
+            MemoryWriteResult::Fault
+        }
     }
 }
 
@@ -207,57 +257,68 @@ impl Platform for Qemu {
         fdt
     }
 
-    fn make_stage2_pagetable() -> IdMap<Stage2> {
-        let mut idmap = IdMap::new(0, Stage2);
+    fn configure_memory_access(builder: &mut Stage2Builder) {
+        // Device memory before the filtered MMIO test page.
+        builder.allow_pages(
+            0,
+            to_pages(FILTERED_MMIO_BASE),
+            STAGE2_DEVICE_ATTRIBUTES,
+        );
 
-        // Device memory
-        idmap
-            .map_range(&MemoryRegion::new(0, DRAM_START), STAGE2_DEVICE_ATTRIBUTES)
-            .expect("failed to map device memory");
+        builder.handle_pages(
+            to_ipa(FILTERED_MMIO_BASE),
+            FILTERED_MMIO_PAGE_COUNT,
+            MemoryAccessHandler::read_write(
+                Self::read_filtered_mmio,
+                Self::write_filtered_mmio,
+            ),
+        );
+
+        // Device memory after the filtered MMIO test page.
+        builder.allow_pages(
+            to_ipa(FILTERED_MMIO_BASE + PAGE_SIZE),
+            to_pages(DRAM_START - (FILTERED_MMIO_BASE + PAGE_SIZE)),
+            STAGE2_DEVICE_ATTRIBUTES,
+        );
 
         // Normal memory before the RITM image.
-        idmap
-            .map_range(
-                &MemoryRegion::new(DRAM_START, RITM_START),
-                STAGE2_MEMORY_ATTRIBUTES,
-            )
-            .expect("failed to map normal memory");
+        builder.allow_pages(
+            DRAM_START as u64,
+            to_pages(RITM_START - DRAM_START),
+            STAGE2_MEMORY_ATTRIBUTES,
+        );
 
         // Normal memory after the RITM image.
-        idmap
-            .map_range(
-                &MemoryRegion::new(RITM_END, 0x1_0000_0000),
-                STAGE2_MEMORY_ATTRIBUTES,
-            )
-            .expect("failed to map normal memory");
+        builder.allow_pages(
+            RITM_END as u64,
+            to_pages(0x1_0000_0000 - RITM_END),
+            STAGE2_MEMORY_ATTRIBUTES,
+        );
 
         // High PCIe ECAM
-        idmap
-            .map_range(
-                &MemoryRegion::new(0x40_1000_0000, 0x40_2000_0000),
-                STAGE2_DEVICE_ATTRIBUTES,
-            )
-            .expect("failed to map High PCIe ECAM");
+        builder.allow_pages(
+            0x40_1000_0000,
+            to_pages(0x40_2000_0000 - 0x40_1000_0000),
+            STAGE2_DEVICE_ATTRIBUTES,
+        );
 
         // High MMIO
-        idmap
-            .map_range(
-                &MemoryRegion::new(0x80_0000_0000, 0x100_0000_0000),
-                STAGE2_DEVICE_ATTRIBUTES,
-            )
-            .expect("failed to map High MMIO");
+        builder.allow_pages(
+            0x80_0000_0000,
+            to_pages(0x100_0000_0000 - 0x80_0000_0000),
+            STAGE2_DEVICE_ATTRIBUTES,
+        );
 
         // Map the shared heap
         let shared_start = &raw const crate::SHARED_HEAP as usize;
         let shared_end = shared_start + Self::SHARED_HEAP_SIZE;
-        idmap
-            .map_range(
-                &MemoryRegion::new(shared_start, shared_end),
-                STAGE2_MEMORY_ATTRIBUTES,
-            )
-            .expect("failed to map shared heap");
-
-        idmap
+        let shared_start = align_down_to_page(shared_start);
+        let shared_end = align_up_to_page(shared_end);
+        builder.allow_pages(
+            shared_start as u64,
+            to_pages(shared_end - shared_start),
+            STAGE2_MEMORY_ATTRIBUTES,
+        );
     }
 
     fn handle_hvc(function_id: u64, _args: [u64; 17]) -> HvcResult {

@@ -7,8 +7,8 @@
 // except according to those terms.
 
 use crate::hvc_response::HvcResult;
-use aarch64_paging::idmap::IdMap;
-use aarch64_paging::paging::{PAGE_SIZE, Stage2};
+use crate::stage2::Stage2Builder;
+use aarch64_paging::paging::PAGE_SIZE;
 use dtoolkit::fdt::Fdt;
 use embedded_io::{Write, WriteReady};
 
@@ -65,11 +65,11 @@ pub trait Platform {
         fdt
     }
 
-    /// Create stage-2 page table for use by the guest for use when booting the payload at EL1.
+    /// Configure stage-2 access policy for the guest when booting the payload at EL1.
     ///
-    /// The page table should typically unmap the part of the memory where RITM resides, so that
-    /// the guest cannot interact with it in any way.
-    fn make_stage2_pagetable() -> IdMap<Stage2>;
+    /// Pages not added to the builder are unmapped by default. Platforms may allow direct access
+    /// or install a memory access handler for selected page ranges.
+    fn configure_memory_access(builder: &mut Stage2Builder);
 
     /// Handles a custom HVC call.
     ///

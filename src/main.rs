@@ -17,14 +17,16 @@ mod exceptions;
 mod hvc_response;
 mod hypervisor;
 mod logger;
+mod memory_access;
 mod pagetable;
 mod platform;
 mod simple_map;
+mod stage2;
 
 include!(concat!(env!("OUT_DIR"), "/payload.rs"));
 
 use aarch64_paging::paging::PAGE_SIZE;
-use aarch64_rt::{entry, exception_handlers};
+use aarch64_rt::entry;
 use arm_sysregs::read_currentel;
 use buddy_system_allocator::{Heap, LockedHeap};
 use core::alloc::Layout;
@@ -35,10 +37,7 @@ use log::{LevelFilter, info};
 use spin::mutex::{SpinMutex, SpinMutexGuard};
 
 use crate::arch::disable_mmu_and_caches;
-use crate::{
-    exceptions::Exceptions,
-    platform::{BootMode, Platform, PlatformImpl},
-};
+use crate::platform::{BootMode, Platform, PlatformImpl};
 
 const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
@@ -54,7 +53,6 @@ static HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
 /// Heap allocator for data that needs to be shared between RITM and the guest running in EL1.
 pub static SHARED_HEAP_ALLOCATOR: LockedHeap<32> = LockedHeap::new();
 
-exception_handlers!(Exceptions);
 entry!(main);
 
 fn main(x0: u64, x1: u64, x2: u64, x3: u64) -> ! {

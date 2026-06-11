@@ -2,6 +2,7 @@
 members = [
     ".",
     "tests/integration_test",
+    "tests/memory_access_test",
     "tests/psci_test",
 ]
 

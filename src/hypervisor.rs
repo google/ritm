@@ -9,16 +9,28 @@
 use crate::hvc_response::{HvcResponse, HvcResult};
 use crate::{
     arch,
+    exceptions::RegisterStateRef,
+    memory_access::{DecodedMemoryAccessKind, decode_memory_access, extend_read_result},
     platform::{Platform, PlatformImpl},
     simple_map::SimpleMap,
+    stage2::{
+        MemoryReadAccess, MemoryReadResult, MemoryWriteAccess, MemoryWriteResult, Stage2Builder,
+        Stage2Config,
+    },
 };
-use aarch64_paging::idmap::IdMap;
-use aarch64_paging::paging::Stage2;
-use aarch64_rt::{RegisterStateRef, Stack};
+use aarch64_rt::Stack;
+// System register wrapper types.
 use arm_sysregs::{
     CnthctlEl2, CntvoffEl2, ElrEl1, ElrEl2, EsrEl1, FarEl1, HcrEl2, IccSreEl2, MairEl1, MpidrEl1,
-    SctlrEl1, SpEl1, SpsrEl1, SpsrEl2, TcrEl1, Ttbr0El1, VbarEl1, VtcrEl2, read_cnthctl_el2,
-    read_esr_el2, read_far_el2, read_icc_sre_el2, read_mpidr_el1, read_spsr_el2, read_vbar_el1,
+    SctlrEl1, SpEl1, SpsrEl1, SpsrEl2, TcrEl1, Ttbr0El1, VbarEl1, VtcrEl2,
+};
+// System register read helpers.
+use arm_sysregs::{
+    read_cnthctl_el2, read_esr_el2, read_far_el2, read_hpfar_el2, read_icc_sre_el2, read_mpidr_el1,
+    read_spsr_el2, read_vbar_el1,
+};
+// System register write helpers.
+use arm_sysregs::{
     write_cnthctl_el2, write_cntvoff_el2, write_elr_el1, write_elr_el2, write_esr_el1,
     write_far_el1, write_hcr_el2, write_icc_sre_el2, write_mair_el1, write_sctlr_el1, write_sp_el1,
     write_spsr_el1, write_spsr_el2, write_tcr_el1, write_ttbr0_el1, write_vbar_el1, write_vtcr_el2,
@@ -28,9 +40,11 @@ use log::debug;
 use spin::Once;
 use spin::mutex::SpinMutex;
 
-static STAGE2_MAP: Once<SpinMutex<IdMap<Stage2>>> = Once::new();
+static STAGE2_CONFIG: Once<Stage2Config> = Once::new();
 
 const AARCH64_INSTRUCTION_LENGTH: usize = 4;
+const EC_DATA_ABORT_LOWER_EL: u8 = 0x24;
+const EC_DATA_ABORT_SAME_EL: u8 = 0x25;
 const SPSR_EL1H: u8 = 5;
 const T0SZ_MAX_SIZE: u8 = 64;
 
@@ -126,9 +140,8 @@ pub unsafe fn entry_point_el1(arg0: u64, arg1: u64, arg2: u64, arg3: u64, entry_
 
 fn setup_stage2() {
     debug!("Setting up stage 2 page table");
-    let mut idmap = STAGE2_MAP
-        .call_once(|| SpinMutex::new(PlatformImpl::make_stage2_pagetable()))
-        .lock();
+    let config = stage2_config();
+    let mut idmap = config.idmap.lock();
 
     let root_pa = idmap.root_address().0;
     debug!("Root PA: {root_pa:#x}");
@@ -155,6 +168,14 @@ fn setup_stage2() {
     arch::dsb();
     arch::isb();
     debug!("Stage 2 activation complete.");
+}
+
+fn stage2_config() -> &'static Stage2Config {
+    STAGE2_CONFIG.call_once(|| {
+        let mut builder = Stage2Builder::new();
+        PlatformImpl::configure_memory_access(&mut builder);
+        builder.build()
+    })
 }
 
 /// Returns to EL1.
@@ -241,7 +262,9 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
 
     match ec {
         ExceptionClass::HvcTrappedInAArch64 | ExceptionClass::SmcTrappedInAArch64 => {
-            let [function_id, args @ .., _] = register_state.registers;
+            let function_id = register_state.registers[0];
+            let mut args = [0; 17];
+            args.copy_from_slice(&register_state.registers[1..=17]);
             debug!("HVC/SMC call: function_id={function_id:#x}");
 
             let result = match function_id {
@@ -256,7 +279,9 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
             result.modify_register_state(&mut register_state);
         }
         ExceptionClass::DataAbortLowerEL => {
-            inject_data_abort(&mut register_state);
+            if !try_memory_access_handler(&mut register_state) {
+                inject_data_abort(&mut register_state);
+            }
         }
         ExceptionClass::Unknown(val) => {
             panic!(
@@ -292,6 +317,100 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
     }
 }
 
+fn try_memory_access_handler(register_state: &mut RegisterStateRef) -> bool {
+    let Some(decoded) = decode_memory_access(
+        read_esr_el2().iss(),
+        read_hpfar_el2().fipa(),
+        read_far_el2().va(),
+        |index| read_saved_guest_register(register_state, index),
+    ) else {
+        return false;
+    };
+
+    let Some(handler_match) = stage2_config().memory_access_handlers.find(decoded.ipa) else {
+        return false;
+    };
+
+    match decoded.kind {
+        DecodedMemoryAccessKind::Read => {
+            let Some(read_handler) = handler_match.region.handler.read else {
+                return false;
+            };
+            let access = MemoryReadAccess {
+                ipa: decoded.ipa,
+                offset: handler_match.offset,
+                width: decoded.width,
+            };
+
+            match read_handler(access) {
+                MemoryReadResult::Value(value) => {
+                    let value = extend_read_result(
+                        value,
+                        decoded.width,
+                        decoded.sign_extend,
+                        decoded.register_width_64,
+                    );
+                    if !write_saved_guest_register(register_state, decoded.register_index, value) {
+                        return false;
+                    }
+                    advance_guest_pc(register_state);
+                    true
+                }
+                MemoryReadResult::Fault => false,
+            }
+        }
+        DecodedMemoryAccessKind::Write { value } => {
+            let Some(write_handler) = handler_match.region.handler.write else {
+                return false;
+            };
+            let access = MemoryWriteAccess {
+                ipa: decoded.ipa,
+                offset: handler_match.offset,
+                width: decoded.width,
+                value,
+            };
+
+            match write_handler(access) {
+                MemoryWriteResult::Handled => {
+                    advance_guest_pc(register_state);
+                    true
+                }
+                MemoryWriteResult::Fault => false,
+            }
+        }
+    }
+}
+
+fn read_saved_guest_register(register_state: &RegisterStateRef, index: usize) -> Option<u64> {
+    match index {
+        0..=30 => Some(register_state.registers[index]),
+        31 => Some(0),
+        _ => None,
+    }
+}
+
+fn write_saved_guest_register(
+    register_state: &mut RegisterStateRef,
+    index: usize,
+    value: u64,
+) -> bool {
+    // SAFETY: We only update the saved guest register targeted by the emulated load.
+    let regs = unsafe { register_state.get_mut() };
+    match index {
+        0..=30 => regs.registers[index] = value,
+        31 => {}
+        _ => return false,
+    }
+    true
+}
+
+fn advance_guest_pc(register_state: &mut RegisterStateRef) {
+    // SAFETY: The MMIO access was emulated, so the guest should resume at the following instruction.
+    unsafe {
+        register_state.get_mut().elr += AARCH64_INSTRUCTION_LENGTH;
+    }
+}
+
 fn inject_data_abort(register_state: &mut RegisterStateRef) {
     // SAFETY: We are modifying the saved register state to redirect execution.
     let regs = unsafe { register_state.get_mut() };
@@ -315,7 +434,12 @@ fn inject_data_abort(register_state: &mut RegisterStateRef) {
         write_spsr_el1(SpsrEl1::from_bits_retain(regs.spsr));
         write_far_el1(FarEl1::from_bits_retain(fault_addr.va()));
     }
-    write_esr_el1(EsrEl1::from_bits_retain(esr.bits()));
+    let mut guest_esr = EsrEl1::from_bits_retain(esr.bits());
+    if guest_esr.ec() == EC_DATA_ABORT_LOWER_EL {
+        // EL2 sees the abort as coming from a lower EL, but the guest handles it at EL1.
+        guest_esr.set_ec(EC_DATA_ABORT_SAME_EL);
+    }
+    write_esr_el1(guest_esr);
 
     // Redirect execution
     #[expect(
@@ -512,7 +636,7 @@ enum ExceptionClass {
     HvcTrappedInAArch64,
     /// SMC instruction execution in `AArch64` state.
     SmcTrappedInAArch64,
-    /// Data Abort taken without a change in Exception Level.
+    /// Data Abort taken from a lower Exception Level.
     DataAbortLowerEL,
     /// Unknown exception class.
     Unknown(u8),
@@ -523,7 +647,7 @@ impl From<u8> for ExceptionClass {
         match value {
             0x16 => Self::HvcTrappedInAArch64,
             0x17 => Self::SmcTrappedInAArch64,
-            0x24 => Self::DataAbortLowerEL,
+            EC_DATA_ABORT_LOWER_EL => Self::DataAbortLowerEL,
             _ => Self::Unknown(value),
         }
     }
