@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use aarch64_rt::RegisterStateRef;
+use crate::exceptions::GuestRegisterStateRef;
 use core::fmt::{Debug, Formatter};
 use log::debug;
 use smccc::arch::Error::NotSupported;
@@ -64,24 +64,28 @@ impl From<[u64; 18]> for HvcResponse {
 }
 
 impl HvcResult {
-    pub(crate) fn modify_register_state(self, register_state: &mut RegisterStateRef) {
-        // SAFETY: We are just answering the guest call.
-        let regs = unsafe { register_state.get_mut() };
+    pub(crate) fn modify_register_state(self, register_state: &mut GuestRegisterStateRef) {
         match self {
             HvcResult::Handled(Ok(HvcResponse::Success(results))) => {
-                regs.registers[0..4].copy_from_slice(&results);
+                write_response_registers(register_state, &results);
             }
             HvcResult::Handled(Ok(HvcResponse::SuccessLarge(results))) => {
-                regs.registers[0..18].copy_from_slice(&results);
+                write_response_registers(register_state, &results);
             }
             HvcResult::Handled(Err(error)) => {
-                regs.registers[0] = error_to_u64(error);
+                register_state.write_gpr(0, error_to_u64(error));
             }
             HvcResult::Unhandled => {
                 debug!("HVC call not handled, returning NOT_SUPPORTED");
-                regs.registers[0] = error_to_u64(NotSupported);
+                register_state.write_gpr(0, error_to_u64(NotSupported));
             }
         }
+    }
+}
+
+fn write_response_registers(register_state: &mut GuestRegisterStateRef, results: &[u64]) {
+    for (index, value) in results.iter().copied().enumerate() {
+        register_state.write_gpr(index, value);
     }
 }
 
