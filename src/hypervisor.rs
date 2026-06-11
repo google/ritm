@@ -9,6 +9,7 @@
 use crate::hvc_response::{HvcResponse, HvcResult};
 use crate::{
     arch,
+    exceptions::RegisterStateRef,
     memory_access::{DecodedMemoryAccessKind, decode_memory_access, extend_read_result},
     platform::{Platform, PlatformImpl},
     simple_map::SimpleMap,
@@ -17,7 +18,7 @@ use crate::{
         Stage2Config,
     },
 };
-use aarch64_rt::{RegisterStateRef, Stack};
+use aarch64_rt::Stack;
 // System register wrapper types.
 use arm_sysregs::{
     CnthctlEl2, CntvoffEl2, ElrEl1, ElrEl2, EsrEl1, FarEl1, HcrEl2, IccSreEl2, MairEl1, MpidrEl1,
@@ -261,7 +262,9 @@ pub fn handle_sync_lower(mut register_state: RegisterStateRef) {
 
     match ec {
         ExceptionClass::HvcTrappedInAArch64 | ExceptionClass::SmcTrappedInAArch64 => {
-            let [function_id, args @ .., _] = register_state.registers;
+            let function_id = register_state.registers[0];
+            let mut args = [0; 17];
+            args.copy_from_slice(&register_state.registers[1..=17]);
             debug!("HVC/SMC call: function_id={function_id:#x}");
 
             let result = match function_id {
@@ -380,9 +383,7 @@ fn try_memory_access_handler(register_state: &mut RegisterStateRef) -> bool {
 
 fn read_saved_guest_register(register_state: &RegisterStateRef, index: usize) -> Option<u64> {
     match index {
-        0..=18 => Some(register_state.registers[index]),
-        29 => Some(register_state.fp),
-        30 => Some(register_state.sp),
+        0..=30 => Some(register_state.registers[index]),
         31 => Some(0),
         _ => None,
     }
@@ -396,9 +397,7 @@ fn write_saved_guest_register(
     // SAFETY: We only update the saved guest register targeted by the emulated load.
     let regs = unsafe { register_state.get_mut() };
     match index {
-        0..=18 => regs.registers[index] = value,
-        29 => regs.fp = value,
-        30 => regs.sp = value,
+        0..=30 => regs.registers[index] = value,
         31 => {}
         _ => return false,
     }
