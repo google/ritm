@@ -45,14 +45,17 @@ impl MemoryAccessWidth {
     }
 }
 
-/// Decoded representation of a trapped guest memory access.
-pub struct DecodedMemoryAccess {
+/// Guest memory access decoded from the instruction syndrome that triggered an exception.
+///
+/// Exception handlers use this to emulate the faulting load or store instruction without decoding
+/// the instruction bytes themselves.
+pub struct MemoryAccess {
     /// The faulting intermediate physical address.
     pub ipa: u64,
     /// The width of the guest access.
     pub width: MemoryAccessWidth,
     /// Whether the access was a read or write.
-    pub kind: DecodedMemoryAccessKind,
+    pub kind: MemoryAccessKind,
     /// The general-purpose register encoded in the syndrome.
     pub register_index: usize,
     /// Whether the read result should be sign-extended.
@@ -61,9 +64,47 @@ pub struct DecodedMemoryAccess {
     pub register_width_64: bool,
 }
 
+impl MemoryAccess {
+    /// Decodes a Data Abort instruction syndrome into a guest memory access.
+    ///
+    /// Returns `None` when the syndrome does not include enough information to emulate the access
+    /// or when a write access needs a saved register value that `read_register` cannot provide.
+    pub fn decode(
+        iss: u32,
+        hpfar_fipa: u64,
+        far_va: u64,
+        mut read_register: impl FnMut(usize) -> Option<u64>,
+    ) -> Option<Self> {
+        // Keep emulation syndrome-only: without ISV, ISS does not describe a GPR transfer well
+        // enough to handle the abort without decoding the trapped instruction.
+        if !decode_valid_instruction_syndrome(iss) {
+            return None;
+        }
+
+        let width = decode_memory_access_width(iss);
+        let register_index = decode_memory_access_register_index(iss);
+        let kind = decode_memory_access_kind(iss, register_index, width, &mut read_register)?;
+
+        Some(Self {
+            ipa: decode_fault_ipa(hpfar_fipa, far_va),
+            width,
+            kind,
+            register_index,
+            sign_extend: decode_memory_access_sign_extend(iss),
+            register_width_64: decode_memory_access_register_width_64(iss),
+        })
+    }
+
+    /// Extends an emulated read value according to the decoded access and target register width.
+    #[must_use]
+    pub fn extend_read_result(&self, value: u64) -> u64 {
+        extend_read_result(value, self.width, self.sign_extend, self.register_width_64)
+    }
+}
+
 /// Decoded read or write direction for a trapped memory access.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum DecodedMemoryAccessKind {
+pub enum MemoryAccessKind {
     /// Guest read from memory into a register.
     Read,
     /// Guest write from a register to memory.
@@ -95,39 +136,8 @@ const DATA_ABORT_ISS_WNR: u32 = 1 << 6;
 const FAULT_IPA_PAGE_SHIFT: u64 = 12;
 const FAULT_IPA_PAGE_OFFSET_MASK: u64 = (1 << FAULT_IPA_PAGE_SHIFT) - 1;
 
-/// Decodes a Data Abort instruction syndrome into a guest memory access.
-///
-/// Returns `None` when the syndrome does not include enough information to emulate the access or
-/// when a write access needs a saved register value that `read_register` cannot provide.
-pub fn decode_memory_access(
-    iss: u32,
-    hpfar_fipa: u64,
-    far_va: u64,
-    mut read_register: impl FnMut(usize) -> Option<u64>,
-) -> Option<DecodedMemoryAccess> {
-    // Keep emulation syndrome-only: without ISV, ISS does not describe a GPR transfer well
-    // enough to handle the abort without decoding the trapped instruction.
-    if !decode_valid_instruction_syndrome(iss) {
-        return None;
-    }
-
-    let width = decode_memory_access_width(iss);
-    let register_index = decode_memory_access_register_index(iss);
-    let kind = decode_memory_access_kind(iss, register_index, width, &mut read_register)?;
-
-    Some(DecodedMemoryAccess {
-        ipa: decode_fault_ipa(hpfar_fipa, far_va),
-        width,
-        kind,
-        register_index,
-        sign_extend: decode_memory_access_sign_extend(iss),
-        register_width_64: decode_memory_access_register_width_64(iss),
-    })
-}
-
-/// Extends an emulated read value according to the decoded access and target register width.
 #[must_use]
-pub fn extend_read_result(
+fn extend_read_result(
     value: u64,
     width: MemoryAccessWidth,
     sign_extend: bool,
@@ -171,12 +181,12 @@ fn decode_memory_access_kind(
     register_index: usize,
     width: MemoryAccessWidth,
     read_register: &mut impl FnMut(usize) -> Option<u64>,
-) -> Option<DecodedMemoryAccessKind> {
+) -> Option<MemoryAccessKind> {
     if decode_memory_access_is_write(iss) {
         let value = read_register(register_index)? & width.mask();
-        Some(DecodedMemoryAccessKind::Write { value })
+        Some(MemoryAccessKind::Write { value })
     } else {
-        Some(DecodedMemoryAccessKind::Read)
+        Some(MemoryAccessKind::Read)
     }
 }
 
@@ -213,21 +223,36 @@ mod tests {
             | flags
     }
 
-    fn decode_with_register(iss: u32, register_value: u64) -> Option<DecodedMemoryAccess> {
-        decode_memory_access(iss, 0x12345, 0xffff_0000_0000_0abc, |index| {
+    fn decode_with_register(iss: u32, register_value: u64) -> Option<MemoryAccess> {
+        MemoryAccess::decode(iss, 0x12345, 0xffff_0000_0000_0abc, |index| {
             assert_eq!(index, 7);
             Some(register_value)
         })
     }
 
+    fn read_access(
+        width: MemoryAccessWidth,
+        sign_extend: bool,
+        register_width_64: bool,
+    ) -> MemoryAccess {
+        MemoryAccess {
+            ipa: 0,
+            width,
+            kind: MemoryAccessKind::Read,
+            register_index: 0,
+            sign_extend,
+            register_width_64,
+        }
+    }
+
     #[test]
     fn decode_rejects_missing_instruction_syndrome() {
-        assert!(decode_memory_access(0, 0x12345, 0xabc, |_| Some(0)).is_none());
+        assert!(MemoryAccess::decode(0, 0x12345, 0xabc, |_| Some(0)).is_none());
     }
 
     #[test]
     fn decode_read_access_from_syndrome_fields() {
-        let access = decode_memory_access(
+        let access = MemoryAccess::decode(
             iss(
                 MemoryAccessWidth::U32,
                 9,
@@ -241,7 +266,7 @@ mod tests {
 
         assert_eq!(access.ipa, 0x1234_5abc);
         assert_eq!(access.width, MemoryAccessWidth::U32);
-        assert_eq!(access.kind, DecodedMemoryAccessKind::Read);
+        assert_eq!(access.kind, MemoryAccessKind::Read);
         assert_eq!(access.register_index, 9);
         assert!(access.sign_extend);
         assert!(access.register_width_64);
@@ -255,10 +280,7 @@ mod tests {
         )
         .expect("access should decode");
 
-        assert_eq!(
-            access.kind,
-            DecodedMemoryAccessKind::Write { value: 0x1234 }
-        );
+        assert_eq!(access.kind, MemoryAccessKind::Write { value: 0x1234 });
         assert_eq!(access.width, MemoryAccessWidth::U16);
         assert_eq!(access.register_index, 7);
     }
@@ -266,7 +288,7 @@ mod tests {
     #[test]
     fn decode_write_access_rejects_unavailable_register_value() {
         assert!(
-            decode_memory_access(
+            MemoryAccess::decode(
                 iss(MemoryAccessWidth::U64, 4, DATA_ABORT_ISS_WNR),
                 0x12345,
                 0xabc,
@@ -279,11 +301,11 @@ mod tests {
     #[test]
     fn extend_read_result_zero_extends_to_32_bit_registers() {
         assert_eq!(
-            extend_read_result(0x1_ffff_ffff, MemoryAccessWidth::U32, false, false),
+            read_access(MemoryAccessWidth::U32, false, false).extend_read_result(0x1_ffff_ffff),
             0xffff_ffff
         );
         assert_eq!(
-            extend_read_result(0x1234, MemoryAccessWidth::U16, false, false),
+            read_access(MemoryAccessWidth::U16, false, false).extend_read_result(0x1234),
             0x1234
         );
     }
@@ -291,11 +313,11 @@ mod tests {
     #[test]
     fn extend_read_result_sign_extends_to_requested_register_width() {
         assert_eq!(
-            extend_read_result(0x80, MemoryAccessWidth::U8, true, true),
+            read_access(MemoryAccessWidth::U8, true, true).extend_read_result(0x80),
             0xffff_ffff_ffff_ff80
         );
         assert_eq!(
-            extend_read_result(0x80, MemoryAccessWidth::U8, true, false),
+            read_access(MemoryAccessWidth::U8, true, false).extend_read_result(0x80),
             0xffff_ff80
         );
     }

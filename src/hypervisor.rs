@@ -29,11 +29,16 @@ use arm_sysregs::{
 };
 use core::arch::naked_asm;
 use log::debug;
-use memory_access::{DecodedMemoryAccessKind, decode_memory_access, extend_read_result};
-use spin::Once;
+use memory_access::{MemoryAccess, MemoryAccessKind};
+use spin::LazyLock;
 use spin::mutex::SpinMutex;
 
-static STAGE2_CONFIG: Once<Stage2Config> = Once::new();
+static STAGE2_CONFIG: LazyLock<Stage2Config> = LazyLock::new(|| {
+    let mut builder = Stage2Builder::new();
+    PlatformImpl::configure_memory_access(&mut builder)
+        .expect("failed to configure stage-2 memory access");
+    builder.build()
+});
 
 const AARCH64_INSTRUCTION_LENGTH: usize = 4;
 const EC_DATA_ABORT_LOWER_EL: u8 = 0x24;
@@ -164,12 +169,7 @@ fn setup_stage2() {
 }
 
 fn stage2_config() -> &'static Stage2Config {
-    STAGE2_CONFIG.call_once(|| {
-        let mut builder = Stage2Builder::new();
-        PlatformImpl::configure_memory_access(&mut builder)
-            .expect("failed to configure stage-2 memory access");
-        builder.build()
-    })
+    &STAGE2_CONFIG
 }
 
 /// Returns to EL1.
@@ -314,7 +314,7 @@ pub fn handle_sync_lower(mut register_state: GuestRegisterStateRef) {
 }
 
 fn try_memory_access_handler(register_state: &mut GuestRegisterStateRef) -> Result<(), ()> {
-    let decoded = decode_memory_access(
+    let decoded = MemoryAccess::decode(
         read_esr_el2().iss(),
         read_hpfar_el2().fipa(),
         read_far_el2().va(),
@@ -328,7 +328,7 @@ fn try_memory_access_handler(register_state: &mut GuestRegisterStateRef) -> Resu
         .ok_or(())?;
 
     match decoded.kind {
-        DecodedMemoryAccessKind::Read => {
+        MemoryAccessKind::Read => {
             let read_handler = handler_match.region.handler.read.ok_or(())?;
             let access = MemoryReadAccess {
                 ipa: decoded.ipa,
@@ -338,22 +338,18 @@ fn try_memory_access_handler(register_state: &mut GuestRegisterStateRef) -> Resu
 
             match read_handler(access) {
                 MemoryReadResult::Value(value) => {
-                    let value = extend_read_result(
-                        value,
-                        decoded.width,
-                        decoded.sign_extend,
-                        decoded.register_width_64,
-                    );
-                    write_saved_guest_register(register_state, decoded.register_index, value)
-                        .then_some(())
-                        .ok_or(())?;
+                    let value = decoded.extend_read_result(value);
+                    // SAFETY: The decoded register is the trapped load instruction's Rt, and
+                    // `value` is the emulated load result for that instruction.
+                    unsafe { register_state.write_gpr(decoded.register_index, value) }
+                        .map_err(|_| ())?;
                     advance_guest_pc(register_state);
                     Ok(())
                 }
                 MemoryReadResult::Fault => Err(()),
             }
         }
-        DecodedMemoryAccessKind::Write { value } => {
+        MemoryAccessKind::Write { value } => {
             let write_handler = handler_match.region.handler.write.ok_or(())?;
             let access = MemoryWriteAccess {
                 ipa: decoded.ipa,
@@ -371,14 +367,6 @@ fn try_memory_access_handler(register_state: &mut GuestRegisterStateRef) -> Resu
             }
         }
     }
-}
-
-fn write_saved_guest_register(
-    register_state: &mut GuestRegisterStateRef,
-    index: usize,
-    value: u64,
-) -> bool {
-    register_state.write_gpr(index, value)
 }
 
 fn advance_guest_pc(register_state: &mut GuestRegisterStateRef) {
@@ -404,7 +392,8 @@ fn inject_data_abort(register_state: &mut GuestRegisterStateRef) {
     let handler = vbar + 0x200; // Current EL with SPx Sync
 
     // Save current context to guest EL1 regs
-    let (elr, spsr) = register_state.exception_return();
+    let elr = register_state.exception_return_address();
+    let spsr = register_state.exception_return_status();
     // SAFETY: We are accessing EL1 system registers to inject exception.
     unsafe {
         write_elr_el1(ElrEl1::from_bits_retain(elr as u64));

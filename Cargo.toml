@@ -32,6 +32,7 @@ memory_access = { path = "memory_access" }
 percore = "0.2"
 smccc = "0.2"
 spin = { version = "0.12", features = ["lazy", "once", "spin_mutex"], default-features = false }
+thiserror = { version = "2.0", default-features = false }
 
 [lints.rust]
 deprecated-safe = "warn"
