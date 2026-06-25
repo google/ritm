@@ -64,7 +64,7 @@ impl From<[u64; 18]> for HvcResponse {
 }
 
 impl HvcResult {
-    pub(crate) fn modify_register_state(self, register_state: &mut GuestRegisterStateRef) {
+    pub fn modify_register_state(self, register_state: &mut GuestRegisterStateRef) {
         match self {
             HvcResult::Handled(Ok(HvcResponse::Success(results))) => {
                 write_response_registers(register_state, &results);

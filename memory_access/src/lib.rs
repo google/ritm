@@ -61,6 +61,14 @@ pub struct DecodedMemoryAccess {
     pub register_width_64: bool,
 }
 
+impl DecodedMemoryAccess {
+    /// Extends an emulated read value according to the decoded access and target register width.
+    #[must_use]
+    pub fn extend_read_result(&self, value: u64) -> u64 {
+        extend_read_result(value, self.width, self.sign_extend, self.register_width_64)
+    }
+}
+
 /// Decoded read or write direction for a trapped memory access.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DecodedMemoryAccessKind {
@@ -125,9 +133,8 @@ pub fn decode_memory_access(
     })
 }
 
-/// Extends an emulated read value according to the decoded access and target register width.
 #[must_use]
-pub fn extend_read_result(
+fn extend_read_result(
     value: u64,
     width: MemoryAccessWidth,
     sign_extend: bool,
@@ -220,6 +227,21 @@ mod tests {
         })
     }
 
+    fn read_access(
+        width: MemoryAccessWidth,
+        sign_extend: bool,
+        register_width_64: bool,
+    ) -> DecodedMemoryAccess {
+        DecodedMemoryAccess {
+            ipa: 0,
+            width,
+            kind: DecodedMemoryAccessKind::Read,
+            register_index: 0,
+            sign_extend,
+            register_width_64,
+        }
+    }
+
     #[test]
     fn decode_rejects_missing_instruction_syndrome() {
         assert!(decode_memory_access(0, 0x12345, 0xabc, |_| Some(0)).is_none());
@@ -279,11 +301,11 @@ mod tests {
     #[test]
     fn extend_read_result_zero_extends_to_32_bit_registers() {
         assert_eq!(
-            extend_read_result(0x1_ffff_ffff, MemoryAccessWidth::U32, false, false),
+            read_access(MemoryAccessWidth::U32, false, false).extend_read_result(0x1_ffff_ffff),
             0xffff_ffff
         );
         assert_eq!(
-            extend_read_result(0x1234, MemoryAccessWidth::U16, false, false),
+            read_access(MemoryAccessWidth::U16, false, false).extend_read_result(0x1234),
             0x1234
         );
     }
@@ -291,11 +313,11 @@ mod tests {
     #[test]
     fn extend_read_result_sign_extends_to_requested_register_width() {
         assert_eq!(
-            extend_read_result(0x80, MemoryAccessWidth::U8, true, true),
+            read_access(MemoryAccessWidth::U8, true, true).extend_read_result(0x80),
             0xffff_ffff_ffff_ff80
         );
         assert_eq!(
-            extend_read_result(0x80, MemoryAccessWidth::U8, true, false),
+            read_access(MemoryAccessWidth::U8, true, false).extend_read_result(0x80),
             0xffff_ff80
         );
     }

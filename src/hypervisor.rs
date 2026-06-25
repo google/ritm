@@ -29,11 +29,16 @@ use arm_sysregs::{
 };
 use core::arch::naked_asm;
 use log::debug;
-use memory_access::{DecodedMemoryAccessKind, decode_memory_access, extend_read_result};
-use spin::Once;
+use memory_access::{DecodedMemoryAccessKind, decode_memory_access};
+use spin::LazyLock;
 use spin::mutex::SpinMutex;
 
-static STAGE2_CONFIG: Once<Stage2Config> = Once::new();
+static STAGE2_CONFIG: LazyLock<Stage2Config> = LazyLock::new(|| {
+    let mut builder = Stage2Builder::new();
+    PlatformImpl::configure_memory_access(&mut builder)
+        .expect("failed to configure stage-2 memory access");
+    builder.build()
+});
 
 const AARCH64_INSTRUCTION_LENGTH: usize = 4;
 const EC_DATA_ABORT_LOWER_EL: u8 = 0x24;
@@ -164,12 +169,7 @@ fn setup_stage2() {
 }
 
 fn stage2_config() -> &'static Stage2Config {
-    STAGE2_CONFIG.call_once(|| {
-        let mut builder = Stage2Builder::new();
-        PlatformImpl::configure_memory_access(&mut builder)
-            .expect("failed to configure stage-2 memory access");
-        builder.build()
-    })
+    &STAGE2_CONFIG
 }
 
 /// Returns to EL1.
@@ -338,12 +338,7 @@ fn try_memory_access_handler(register_state: &mut GuestRegisterStateRef) -> Resu
 
             match read_handler(access) {
                 MemoryReadResult::Value(value) => {
-                    let value = extend_read_result(
-                        value,
-                        decoded.width,
-                        decoded.sign_extend,
-                        decoded.register_width_64,
-                    );
+                    let value = decoded.extend_read_result(value);
                     // SAFETY: The decoded register is the trapped load instruction's Rt, and
                     // `value` is the emulated load result for that instruction.
                     unsafe { register_state.write_gpr(decoded.register_index, value) }

@@ -173,7 +173,7 @@ impl MemoryAccessHandlerRegistry {
     }
 
     fn register(&mut self, region: MemoryAccessRegion) -> Result<(), Stage2ConfigError> {
-        if self.regions.len() >= MAX_MEMORY_ACCESS_HANDLERS {
+        if self.regions.is_full() {
             return Err(Stage2ConfigError::TooManyMemoryAccessHandlerRegions);
         }
 
@@ -317,7 +317,7 @@ impl Stage2Builder {
     }
 
     fn check_allowed_range_capacity(&self) -> Result<(), Stage2ConfigError> {
-        if self.allowed_ranges.len() >= MAX_ALLOWED_RANGES {
+        if self.allowed_ranges.is_full() {
             Err(Stage2ConfigError::TooManyAllowedRanges)
         } else {
             Ok(())
@@ -348,17 +348,17 @@ impl Stage2Builder {
 }
 
 /// Rounds `address` down to the nearest stage-2 page boundary.
-pub(crate) fn align_down_to_page(address: usize) -> usize {
+pub fn align_down_to_page(address: usize) -> usize {
     address / PAGE_SIZE * PAGE_SIZE
 }
 
 /// Rounds `address` up to the nearest stage-2 page boundary.
-pub(crate) fn align_up_to_page(address: usize) -> usize {
+pub fn align_up_to_page(address: usize) -> usize {
     address.next_multiple_of(PAGE_SIZE)
 }
 
 /// Converts a `usize` address to an IPA.
-pub(crate) fn to_ipa(address: usize) -> u64 {
+pub fn to_ipa(address: usize) -> u64 {
     u64::try_from(address).expect("IPA should fit in u64")
 }
 
