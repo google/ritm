@@ -22,6 +22,11 @@ pub struct NonVolatileRegisters {
 
 const _: () = assert!(size_of::<NonVolatileRegisters>() == 8 * 10);
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum GuestRegisterWriteError {
+    InvalidRegisterIndex,
+}
+
 /// Guest register view for synchronous lower-EL exceptions.
 ///
 /// This combines the volatile registers saved by `aarch64-rt` with the x19-x28 frame saved by
@@ -61,7 +66,20 @@ impl<'a> GuestRegisterStateRef<'a> {
     }
 
     /// Updates guest GPR `index`.
-    pub fn write_gpr(&mut self, index: usize, value: u64) -> bool {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GuestRegisterWriteError::InvalidRegisterIndex`] if `index` is not a guest GPR.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `value` is safe to write into guest GPR `index` for the trapped
+    /// instruction or exception being handled.
+    pub unsafe fn write_gpr(
+        &mut self,
+        index: usize,
+        value: u64,
+    ) -> Result<(), GuestRegisterWriteError> {
         match index {
             0..=18 => {
                 // SAFETY: We only update the saved guest register targeted by the handler.
@@ -83,14 +101,19 @@ impl<'a> GuestRegisterStateRef<'a> {
                 }
             }
             31 => {}
-            _ => return false,
+            _ => return Err(GuestRegisterWriteError::InvalidRegisterIndex),
         }
-        true
+        Ok(())
     }
 
-    /// Returns the saved exception return address and status.
-    pub fn exception_return(&self) -> (usize, u64) {
-        (self.volatile.elr, self.volatile.spsr)
+    /// Returns the saved exception return address.
+    pub fn exception_return_address(&self) -> usize {
+        self.volatile.elr
+    }
+
+    /// Returns the saved exception return status.
+    pub fn exception_return_status(&self) -> u64 {
+        self.volatile.spsr
     }
 
     /// Advances the saved exception return address by `byte_count`.
@@ -149,13 +172,7 @@ impl ExceptionHandlers for Exceptions {
 
 extern "C" fn sync_lower_with_nonvolatile(
     volatile: VolatileRegisterStateRef,
-    nonvolatile: *mut NonVolatileRegisters,
+    nonvolatile: &mut NonVolatileRegisters,
 ) {
-    // SAFETY: The naked wrapper passes a valid pointer to the x19-x28 frame it saved on the stack.
-    let nonvolatile = unsafe {
-        nonvolatile
-            .as_mut()
-            .expect("non-volatile register frame should not be null")
-    };
     crate::hypervisor::handle_sync_lower(GuestRegisterStateRef::new(volatile, nonvolatile));
 }

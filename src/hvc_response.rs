@@ -73,11 +73,21 @@ impl HvcResult {
                 write_response_registers(register_state, &results);
             }
             HvcResult::Handled(Err(error)) => {
-                register_state.write_gpr(0, error_to_u64(error));
+                // SAFETY: x0 is the SMCCC return value register.
+                unsafe {
+                    register_state
+                        .write_gpr(0, error_to_u64(error))
+                        .expect("x0 is a valid guest register");
+                }
             }
             HvcResult::Unhandled => {
                 debug!("HVC call not handled, returning NOT_SUPPORTED");
-                register_state.write_gpr(0, error_to_u64(NotSupported));
+                // SAFETY: x0 is the SMCCC return value register.
+                unsafe {
+                    register_state
+                        .write_gpr(0, error_to_u64(NotSupported))
+                        .expect("x0 is a valid guest register");
+                }
             }
         }
     }
@@ -85,7 +95,13 @@ impl HvcResult {
 
 fn write_response_registers(register_state: &mut GuestRegisterStateRef, results: &[u64]) {
     for (index, value) in results.iter().copied().enumerate() {
-        register_state.write_gpr(index, value);
+        // SAFETY: SMCCC responses return values in x0-x17, and callers only pass slices from
+        // fixed-size x0-x3 or x0-x17 response arrays.
+        unsafe {
+            register_state
+                .write_gpr(index, value)
+                .expect("SMCCC response register index should be valid");
+        }
     }
 }
 

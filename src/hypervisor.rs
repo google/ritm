@@ -344,9 +344,10 @@ fn try_memory_access_handler(register_state: &mut GuestRegisterStateRef) -> Resu
                         decoded.sign_extend,
                         decoded.register_width_64,
                     );
-                    write_saved_guest_register(register_state, decoded.register_index, value)
-                        .then_some(())
-                        .ok_or(())?;
+                    // SAFETY: The decoded register is the trapped load instruction's Rt, and
+                    // `value` is the emulated load result for that instruction.
+                    unsafe { register_state.write_gpr(decoded.register_index, value) }
+                        .map_err(|_| ())?;
                     advance_guest_pc(register_state);
                     Ok(())
                 }
@@ -373,14 +374,6 @@ fn try_memory_access_handler(register_state: &mut GuestRegisterStateRef) -> Resu
     }
 }
 
-fn write_saved_guest_register(
-    register_state: &mut GuestRegisterStateRef,
-    index: usize,
-    value: u64,
-) -> bool {
-    register_state.write_gpr(index, value)
-}
-
 fn advance_guest_pc(register_state: &mut GuestRegisterStateRef) {
     // SAFETY: The memory access handler has emulated the trapped instruction, so guest execution can
     // resume at the following instruction.
@@ -404,7 +397,8 @@ fn inject_data_abort(register_state: &mut GuestRegisterStateRef) {
     let handler = vbar + 0x200; // Current EL with SPx Sync
 
     // Save current context to guest EL1 regs
-    let (elr, spsr) = register_state.exception_return();
+    let elr = register_state.exception_return_address();
+    let spsr = register_state.exception_return_status();
     // SAFETY: We are accessing EL1 system registers to inject exception.
     unsafe {
         write_elr_el1(ElrEl1::from_bits_retain(elr as u64));
