@@ -93,9 +93,9 @@ dependencies = [
 
 [[package]]
 name = "dtoolkit"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d9ee64930d1433b5922f6d144d7d56705d25a75cff226d2e48dcdaaac362d50"
+checksum = "c62b199434ff32546ff227fc7fb2d5f8a22ad91d5256208c27cda6b10e6b5f73"
 dependencies = [
  "indexmap",
  "thiserror",
