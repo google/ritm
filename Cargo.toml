@@ -25,7 +25,7 @@ arm-pl011-uart = "0.5"
 arm-psci = "0.2"
 arm-sysregs = { version = "0.2", features = ["el1", "el2"] }
 buddy_system_allocator = { version = "0.13", default-features = false, features = ["alloc", "use_spin"] }
-dtoolkit = { version = "0.2", features = ["write"] }
+dtoolkit = { version = "0.3", features = ["write"] }
 embedded-io = "0.7"
 log = "0.4"
 memory_access = { path = "memory_access" }
