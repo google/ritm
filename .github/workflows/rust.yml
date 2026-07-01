@@ -14,7 +14,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install aarch64 toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
@@ -28,14 +28,14 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Format Rust code
         run: cargo fmt --all -- --check
 
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Install aarch64 toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
