@@ -47,7 +47,7 @@ jobs:
           sudo apt-get update && \
             sudo apt-get install -y --no-install-recommends qemu-system-arm ipxe-qemu
       - name: Install cargo-binutils
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@v2.85.4
         with:
           tool: cargo-binutils
       - name: Prepare QEMU
