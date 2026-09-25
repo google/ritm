@@ -11,8 +11,10 @@ HOST_TARGET := $(shell rustc -vV | sed -n 's/^host: //p')
 PLATFORM ?= qemu
 PAYLOAD ?=
 
-BIN := target/ritm.$(PLATFORM).bin
-ELF := target/aarch64-unknown-none/debug/ritm
+export CARGO_TARGET_DIR ?= $(CURDIR)/target
+
+BIN := $(CARGO_TARGET_DIR)/ritm.$(PLATFORM).bin
+ELF := $(CARGO_TARGET_DIR)/aarch64-unknown-none/debug/ritm
 PLATFORM_BUILD_ENV = RUSTFLAGS='--cfg platform="$(1)"'
 BUILD_ENV = $(call PLATFORM_BUILD_ENV,$(PLATFORM))
 
@@ -33,7 +35,7 @@ clippy-fix:
 build:
 	$(BUILD_ENV) cargo build $(TARGET)
 
-target/ritm.%.bin:
+$(CARGO_TARGET_DIR)/ritm.%.bin:
 	$(call PLATFORM_BUILD_ENV,$*) cargo build $(TARGET)
 	$(call PLATFORM_BUILD_ENV,$*) cargo objcopy $(TARGET) -- -O binary $@
 
@@ -58,4 +60,4 @@ test:
 
 clean:
 	cargo clean
-	rm -f target/*.bin
+	rm -f $(CARGO_TARGET_DIR)/*.bin
