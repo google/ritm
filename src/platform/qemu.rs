@@ -30,9 +30,9 @@ use log::warn;
 
 use crate::platform::{PAYLOAD_ADDRESS, RITM_IMAGE_ADDRESS};
 use crate::stage2::{
-    MemoryAccessHandler, MemoryAccessWidth, MemoryReadAccess, MemoryReadResult,
-    MemoryWriteAccess, MemoryWriteResult, Stage2Builder, Stage2ConfigError, align_down_to_page,
-    align_up_to_page, to_ipa,
+    MemoryAccessHandler, MemoryAccessWidth, MemoryReadAccess, MemoryReadResult, MemoryWriteAccess,
+    MemoryWriteResult, Stage2Builder, Stage2ConfigError, align_down_to_page, align_up_to_page,
+    to_ipa,
 };
 
 pub type PlatformImpl = Qemu;
@@ -71,7 +71,7 @@ impl Qemu {
             .root()
             .child("chosen")?
             .property("bootargs")?
-            .as_str()
+            .value_as::<&str>()
             .ok()?;
         for arg in args.split_whitespace() {
             if let Some(boot_mode) = arg.strip_prefix("ritm.boot_mode=") {
@@ -249,10 +249,7 @@ impl Platform for Qemu {
         builder.handle_range(
             to_ipa(FILTERED_MMIO_BASE),
             FILTERED_MMIO_SIZE,
-            MemoryAccessHandler::read_write(
-                Self::read_filtered_mmio,
-                Self::write_filtered_mmio,
-            ),
+            MemoryAccessHandler::read_write(Self::read_filtered_mmio, Self::write_filtered_mmio),
         )?;
 
         // Device memory after the filtered MMIO test page.
