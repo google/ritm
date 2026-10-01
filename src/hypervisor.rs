@@ -18,14 +18,24 @@ use crate::{
     },
 };
 use aarch64_rt::Stack;
-use arm_sysregs::{
-    CnthctlEl2, CntvoffEl2, ElrEl1, ElrEl2, EsrEl1, FarEl1, HcrEl2, IccSreEl2, MairEl1, MpidrEl1,
-    SctlrEl1, SpEl1, SpsrEl1, SpsrEl2, TcrEl1, Ttbr0El1, VbarEl1, VtcrEl2, read_cnthctl_el2,
-    read_esr_el2, read_far_el2, read_hpfar_el2, read_icc_sre_el2, read_mpidr_el1, read_spsr_el2,
-    read_vbar_el1, write_cnthctl_el2, write_cntvoff_el2, write_elr_el1, write_elr_el2,
-    write_esr_el1, write_far_el1, write_hcr_el2, write_icc_sre_el2, write_mair_el1,
-    write_sctlr_el1, write_sp_el1, write_spsr_el1, write_spsr_el2, write_tcr_el1, write_ttbr0_el1,
-    write_vbar_el1, write_vtcr_el2,
+use arm_sysregs::el1::{
+    accessors::{
+        read_mpidr_el1, read_vbar_el1, write_elr_el1, write_esr_el1, write_far_el1, write_mair_el1,
+        write_sctlr_el1, write_sp_el1, write_spsr_el1, write_tcr_el1, write_ttbr0_el1,
+        write_vbar_el1,
+    },
+    registers::{
+        ElrEl1, EsrEl1, FarEl1, MairEl1, MpidrEl1, SctlrEl1, SpEl1, SpsrEl1, TcrEl1, Ttbr0El1,
+        VbarEl1,
+    },
+};
+use arm_sysregs::el2::{
+    accessors::{
+        read_cnthctl_el2, read_esr_el2, read_far_el2, read_hpfar_el2, read_icc_sre_el2,
+        read_spsr_el2, write_cnthctl_el2, write_cntvoff_el2, write_elr_el2, write_hcr_el2,
+        write_icc_sre_el2, write_spsr_el2, write_vtcr_el2,
+    },
+    registers::{CnthctlEl2, CntvoffEl2, ElrEl2, HcrEl2, IccSreEl2, SpsrEl2, VtcrEl2},
 };
 use core::arch::naked_asm;
 use log::debug;
