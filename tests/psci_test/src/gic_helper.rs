@@ -23,8 +23,8 @@ fn create_gic() -> SpinMutex<GicV3<'static>> {
             arm_gic::UniqueMmioPointer::new(NonNull::new(GICD_BASE as *mut _).unwrap()),
             NonNull::new(GICR_BASE as *mut _).unwrap(),
             CORE_COUNT,
-            false,
         )
+        .expect("Failed to create GicV3")
     };
 
     gic.distributor().enable_group1_non_secure(true);

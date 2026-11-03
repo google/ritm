@@ -12,7 +12,7 @@
 use aarch64_rt::{ExceptionHandlers, RegisterStateRef, entry, exception_handlers};
 use arm_pl011_uart::Uart;
 use arm_psci::PowerState;
-use arm_sysregs::read_cntfrq_el0;
+use arm_sysregs::el0::accessors::read_cntfrq_el0;
 use core::fmt::Write;
 use core::panic::PanicInfo;
 use core::ptr::NonNull;

@@ -26,7 +26,7 @@ include!(concat!(env!("OUT_DIR"), "/payload.rs"));
 
 use aarch64_paging::paging::PAGE_SIZE;
 use aarch64_rt::{entry, exception_handlers};
-use arm_sysregs::read_currentel;
+use arm_sysregs::el0::accessors::read_currentel;
 use buddy_system_allocator::{Heap, LockedHeap};
 use core::alloc::Layout;
 use core::arch::naked_asm;

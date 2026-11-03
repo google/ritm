@@ -8,7 +8,7 @@
 
 //! Architecture-specific code.
 
-use arm_sysregs::{SctlrEl2, read_sctlr_el2};
+use arm_sysregs::el2::{accessors::read_sctlr_el2, registers::SctlrEl2};
 use core::arch::{asm, naked_asm};
 
 /// Data Synchronization Barrier.

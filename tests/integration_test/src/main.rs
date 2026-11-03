@@ -11,7 +11,7 @@
 
 use aarch64_rt::{ExceptionHandlers, RegisterStateRef, entry, exception_handlers};
 use arm_pl011_uart::{Uart, UniqueMmioPointer};
-use arm_sysregs::read_esr_el1;
+use arm_sysregs::el1::accessors::read_esr_el1;
 use core::arch::{asm, naked_asm};
 use core::fmt::Write;
 use core::panic::PanicInfo;

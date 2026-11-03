@@ -7,11 +7,15 @@
 // except according to those terms.
 
 use arm_gic::IntId;
-use arm_sysregs::{CntpCtlEl0, CntpTvalEl0, write_cntp_ctl_el0, write_cntp_tval_el0};
+use arm_sysregs::el0::{
+    accessors::{write_cntp_ctl_el0, write_cntp_tval_el0},
+    registers::{CntpCtlEl0, CntpTvalEl0},
+};
 
 pub const INTERRUPT_ID: IntId = IntId::ppi(14);
 
 pub fn set(ticks: u32) {
+    let ticks = i32::try_from(ticks).unwrap();
     write_cntp_tval_el0(CntpTvalEl0::empty().with_timervalue(ticks));
     write_cntp_ctl_el0(CntpCtlEl0::ENABLE);
 }
